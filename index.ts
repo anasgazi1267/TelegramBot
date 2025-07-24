@@ -1,4 +1,3 @@
-
 import TelegramBot from 'node-telegram-bot-api';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -20,7 +19,7 @@ const REQUIRED_CHANNELS = [
 const CONFIG = {
   REF_BONUS: 0.02,
   PLATFORM_FEE: 0.20,
-  MIN_CPC: 0.005,
+  MIN_CPC: 0.001,
   MAX_CPC: 0.100,
   MIN_DEPOSIT: 0.20,
   MAX_DEPOSIT: 1000,
@@ -30,7 +29,8 @@ const CONFIG = {
   BINANCE_PAY_ID: '787819330',
   PAYEER_ID: 'P1102512228',
   BOT_USERNAME: '@task_cpbot',
-  BOT_NAME: 'AnasCP'
+  BOT_NAME: 'AnasCP',
+  ADMIN_COMMISSION: 0.0001
 };
 
 // Data storage
@@ -126,7 +126,7 @@ const getMainKeyboard = () => {
         ],
         [
           { text: '🤖 Join Bots', callback_data: 'join_bots' },
-          { text: '😄 More Tasks', callback_data: 'more_tasks' }
+          { text: '🗳️ Voting Tasks', callback_data: 'voting_tasks' }
         ],
         [
           { text: '📊 Advertise 📊', callback_data: 'advertise' }
@@ -158,7 +158,7 @@ const getAdvertiseKeyboard = () => {
           { text: '🔗 Site Visits', callback_data: 'ad_site_visits' }
         ],
         [
-          { text: '📊 Post Views', callback_data: 'ad_post_views' },
+          { text: '🗳️ Voting Tasks', callback_data: 'ad_voting_tasks' },
           { text: '🐦 Twitter Tasks', callback_data: 'ad_twitter' }
         ],
         [
@@ -206,18 +206,18 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
   const userId = msg.from?.id!;
   const username = msg.from?.username || '';
   const firstName = msg.from?.first_name || 'User';
-  
+
   // Store referral code for later use
   const referralCode = match?.[1]?.trim();
   let referrerId = null;
-  
+
   if (referralCode && referralCode !== userId.toString()) {
     referrerId = parseInt(referralCode);
   }
 
   // Check if user joined required channels
   const hasJoined = await checkChannelMembership(userId);
-  
+
   if (!hasJoined) {
     const joinMessage = `🔐 Welcome to ${CONFIG.BOT_NAME} Bot!\n\n` +
       `You must join these 4 channels first:\n\n` +
@@ -226,7 +226,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
       `3️⃣ ${REQUIRED_CHANNELS[2]}\n` +
       `4️⃣ ${REQUIRED_CHANNELS[3]}\n\n` +
       `After joining all channels, press the button below:`;
-    
+
     return bot.sendMessage(chatId, joinMessage, {
       reply_markup: {
         inline_keyboard: [
@@ -263,7 +263,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
       users[referrerId].referrals += 1;
       users[referrerId].totalEarned += CONFIG.REF_BONUS;
       users[referrerId].totalReferralEarned = (users[referrerId].totalReferralEarned || 0) + CONFIG.REF_BONUS;
-      
+
       // Notify referrer
       bot.sendMessage(referrerId, 
         `🎉 New Referral Joined!\n\n` +
@@ -280,7 +280,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
         `💰 Referral Bonus: ${CONFIG.REF_BONUS} ${CONFIG.CURRENCY}\n` +
         `📅 Time: ${new Date().toLocaleString()}\n` +
         `📊 Total Users: ${Object.keys(users).length}`;
-      
+
       bot.sendMessage(ADMIN_ID, adminNotification);
     } else {
       // Notify admin of new user without referrer
@@ -291,7 +291,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
         `📍 No referrer\n` +
         `📅 Time: ${new Date().toLocaleString()}\n` +
         `📊 Total Users: ${Object.keys(users).length}`;
-      
+
       bot.sendMessage(ADMIN_ID, adminNotification);
     }
 
@@ -307,7 +307,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
     `🌐 Visit Sites - Earn by visiting websites\n` +
     `👥 Join Channels - Earn by joining channels\n` +
     `🤖 Join Bots - Earn by joining bots\n` +
-    `😄 More Tasks - More tasks and bonuses\n\n` +
+    `🗳️ Voting Tasks - Earn by completing voting tasks\n\n` +
     `📊 Create your own advertisements to grow your business!\n\n` +
     `ℹ️ Use /help command for assistance`;
 
@@ -354,6 +354,7 @@ bot.onText(/\/help/, (msg) => {
     `🌐 Visit Sites - Website visit tasks\n` +
     `👥 Join Channels - Channel join tasks\n` +
     `🤖 Join Bots - Bot join tasks\n` +
+    `🗳️ Voting Tasks - Voting tasks\n` +
     `📊 Advertise - Create advertisements\n` +
     `💳 Deposit - Add money to account\n` +
     `🏧 Withdraw - Withdraw money\n\n` +
@@ -378,7 +379,7 @@ bot.on('callback_query', async (query) => {
   const chatId = query.message?.chat.id!;
   const userId = query.from.id;
   const data = query.data;
-  
+
   if (!users[userId] && !data?.startsWith('check_membership')) {
     return bot.answerCallbackQuery(query.id, { text: 'Please start the bot first with /start' });
   }
@@ -389,16 +390,16 @@ bot.on('callback_query', async (query) => {
       case (data?.match(/^check_membership_/) || {}).input:
         const referrerIdFromCallback = data.includes('_') ? data.split('_')[2] : null;
         const referrerId = referrerIdFromCallback !== 'none' ? parseInt(referrerIdFromCallback) : null;
-        
+
         const hasJoined = await checkChannelMembership(userId);
         if (hasJoined) {
           bot.answerCallbackQuery(query.id, { text: '✅ Membership confirmed!' });
-          
+
           // Register user now with referral
           if (!users[userId]) {
             const username = query.from.username || '';
             const firstName = query.from.first_name || 'User';
-            
+
             users[userId] = {
               id: userId,
               username,
@@ -424,7 +425,7 @@ bot.on('callback_query', async (query) => {
               users[referrerId].referrals += 1;
               users[referrerId].totalEarned += CONFIG.REF_BONUS;
               users[referrerId].totalReferralEarned = (users[referrerId].totalReferralEarned || 0) + CONFIG.REF_BONUS;
-              
+
               // Notify referrer
               bot.sendMessage(referrerId, 
                 `🎉 New Referral Joined!\n\n` +
@@ -435,7 +436,7 @@ bot.on('callback_query', async (query) => {
 
             saveData();
           }
-          
+
           setTimeout(() => {
             const welcomeMessage = `🎉 Welcome ${query.from.first_name}!\n` +
               `💎 Welcome to ${CONFIG.BOT_NAME} CPC Platform\n\n` +
@@ -446,7 +447,7 @@ bot.on('callback_query', async (query) => {
               `🌐 Visit Sites - Earn by visiting websites\n` +
               `👥 Join Channels - Earn by joining channels\n` +
               `🤖 Join Bots - Earn by joining bots\n` +
-              `😄 More Tasks - More tasks and bonuses\n\n` +
+              `🗳️ Voting Tasks - Earn by completing voting tasks\n\n` +
               `📊 Create your own advertisements to grow your business!`;
 
             bot.editMessageText(welcomeMessage, {
@@ -470,7 +471,7 @@ bot.on('callback_query', async (query) => {
           `✅ Completed Tasks: ${users[userId].tasksCompleted}\n` +
           `📊 Created Ads: ${users[userId].adsCreated}\n\n` +
           `💡 Complete more tasks or create advertisements to earn more!`;
-        
+
         bot.editMessageText(balanceMessage, {
           chat_id: chatId,
           message_id: query.message?.message_id,
@@ -504,7 +505,7 @@ bot.on('callback_query', async (query) => {
           `2️⃣ Select payment method\n` +
           `3️⃣ Send payment to our ID\n` +
           `4️⃣ Submit payment proof`;
-        
+
         bot.editMessageText(depositMessage, {
           chat_id: chatId,
           message_id: query.message?.message_id,
@@ -611,7 +612,7 @@ bot.on('callback_query', async (query) => {
             `2️⃣ Select payment method\n` +
             `3️⃣ Enter your payment ID\n` +
             `4️⃣ Wait for admin approval`;
-          
+
           bot.editMessageText(withdrawMsg, {
             chat_id: chatId,
             message_id: query.message?.message_id,
@@ -710,7 +711,7 @@ bot.on('callback_query', async (query) => {
           userStates[userId] = 'creating_ad_channel_members_title';
           bot.editMessageText(`👥 Create Channel Members Advertisement\n\n` +
             `📝 Enter advertisement title:\n\n` +
-            `💡 Example: "Join our amazing crypto channel!"\n` +
+            `💡 Example: "Join our amazing cryptochannel!"\n` +
             `📏 Maximum 50 characters\n\n` +
             `⚠️ IMPORTANT: After creating this ad, you MUST add ${CONFIG.BOT_USERNAME} as admin to your channel so we can verify if users actually joined!\n\n` +
             `🔧 Add ${CONFIG.BOT_USERNAME} as admin in your channel`, {
@@ -773,9 +774,33 @@ bot.on('callback_query', async (query) => {
         }
         break;
 
+      case 'ad_voting_tasks':
+        if (users[userId].balance < CONFIG.MIN_CPC) {
+          bot.answerCallbackQuery(query.id, { 
+            text: `❌ Minimum balance required: ${CONFIG.MIN_CPC} ${CONFIG.CURRENCY}`,
+            show_alert: true 
+          });
+        } else {
+          userStates[userId] = 'creating_ad_voting_tasks_title';
+          bot.editMessageText(`🗳️ Create Voting Tasks Advertisement\n\n` +
+            `📝 Enter advertisement title:\n\n` +
+            `💡 Example: "Vote for our project and get reward!"\n` +
+            `📏 Maximum 50 characters\n\n` +
+            `⚠️ Make sure your title is attractive and clear`, {
+            chat_id: chatId,
+            message_id: query.message?.message_id,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🔙 Back', callback_data: 'advertise' }]
+              ]
+            }
+          });
+        }
+        break;
+
       case 'my_ads':
         const userAds = Object.values(advertisements).filter((ad: any) => ad.userId === userId);
-        
+
         if (userAds.length === 0) {
           bot.editMessageText(`📈 My Advertisements\n\n` +
             `❌ You haven't created any advertisements yet!\n\n` +
@@ -791,12 +816,12 @@ bot.on('callback_query', async (query) => {
           });
         } else {
           let adsText = `📈 My Advertisements (${userAds.length})\n\n`;
-          
+
           userAds.forEach((ad: any, index: number) => {
             const statusEmoji = ad.status === 'active' ? '🟢' : ad.status === 'paused' ? '🟡' : '🔴';
             const remainingBudget = (ad.totalBudget - ad.totalSpent).toFixed(6);
             const completionRate = ad.totalBudget > 0 ? ((ad.totalSpent / ad.totalBudget) * 100).toFixed(1) : '0';
-            
+
             adsText += `${statusEmoji} Ad #${ad.id}\n` +
               `📝 ${ad.title}\n` +
               `💰 CPC: ${ad.cpc.toFixed(6)} ${CONFIG.CURRENCY}\n` +
@@ -805,7 +830,7 @@ bot.on('callback_query', async (query) => {
               `💎 Remaining: ${remainingBudget} ${CONFIG.CURRENCY}\n` +
               `📈 Progress: ${completionRate}%\n\n`;
           });
-          
+
           bot.editMessageText(adsText, {
             chat_id: chatId,
             message_id: query.message?.message_id,
@@ -851,7 +876,7 @@ bot.on('callback_query', async (query) => {
           const task = availableSiteTasks[Math.floor(Math.random() * availableSiteTasks.length)] as any;
           const remainingBudget = (task.totalBudget - task.totalSpent).toFixed(6);
           const remainingClicks = Math.floor((task.totalBudget - task.totalSpent) / task.cpc);
-          
+
           const siteTaskMessage = `🌐 Website Visit Task #${task.id}\n\n` +
             `📝 Title: ${task.title}\n` +
             `📄 Description: ${task.description}\n` +
@@ -866,7 +891,7 @@ bot.on('callback_query', async (query) => {
             `3️⃣ Browse the website\n` +
             `4️⃣ Click "✅ Task Complete"\n\n` +
             `🎯 Available Tasks: ${availableSiteTasks.length}`;
-          
+
           bot.editMessageText(siteTaskMessage, {
             chat_id: chatId,
             message_id: query.message?.message_id,
@@ -915,7 +940,7 @@ bot.on('callback_query', async (query) => {
           const task = availableChannelTasks[Math.floor(Math.random() * availableChannelTasks.length)] as any;
           const remainingBudget = (task.totalBudget - task.totalSpent).toFixed(6);
           const remainingClicks = Math.floor((task.totalBudget - task.totalSpent) / task.cpc);
-          
+
           const channelTaskMessage = `👥 Channel Join Task #${task.id}\n\n` +
             `📝 Title: ${task.title}\n` +
             `📄 Description: ${task.description}\n` +
@@ -930,7 +955,7 @@ bot.on('callback_query', async (query) => {
             `4️⃣ Click "✅ Task Complete"\n\n` +
             `⚠️ You must actually join to get reward!\n` +
             `🎯 Available Tasks: ${availableChannelTasks.length}`;
-          
+
           bot.editMessageText(channelTaskMessage, {
             chat_id: chatId,
             message_id: query.message?.message_id,
@@ -979,7 +1004,7 @@ bot.on('callback_query', async (query) => {
           const task = availableBotTasks[Math.floor(Math.random() * availableBotTasks.length)] as any;
           const remainingBudget = (task.totalBudget - task.totalSpent).toFixed(6);
           const remainingClicks = Math.floor((task.totalBudget - task.totalSpent) / task.cpc);
-          
+
           const botTaskMessage = `🤖 Bot Join Task #${task.id}\n\n` +
             `📝 Title: ${task.title}\n` +
             `📄 Description: ${task.description}\n` +
@@ -993,7 +1018,7 @@ bot.on('callback_query', async (query) => {
             `3️⃣ Interact with bot for 30+ seconds\n` +
             `4️⃣ Click "✅ Task Complete"\n\n` +
             `🎯 Available Tasks: ${availableBotTasks.length}`;
-          
+
           bot.editMessageText(botTaskMessage, {
             chat_id: chatId,
             message_id: query.message?.message_id,
@@ -1004,6 +1029,68 @@ bot.on('callback_query', async (query) => {
                   { text: '🤖 Start Bot', url: task.link }
                 ],
                 [{ text: '✅ Task Complete', callback_data: `complete_task_${task.id}` }],
+                [{ text: '🔙 Back', callback_data: 'back_to_main' }]
+              ]
+            }
+          });
+        }
+        break;
+
+      case 'voting_tasks':
+        // Generate voting tasks
+        const availableVotingTasks = Object.values(advertisements).filter((ad: any) => 
+          ad.status === 'active' && 
+          ad.type === 'voting_tasks' && 
+          ad.totalSpent < ad.totalBudget &&
+          !users[userId].completedTasks.includes(ad.id) &&
+          ad.userId !== userId
+        );
+
+        if (availableVotingTasks.length === 0) {
+          bot.editMessageText(`🗳️ Voting Tasks\n\n` +
+            `❌ No voting tasks available currently!\n\n` +
+            `🔄 Please check back later\n` +
+            `📊 Or create advertisements for voting tasks`, {
+            chat_id: chatId,
+            message_id: query.message?.message_id,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '➕ Create Advertisement', callback_data: 'ad_voting_tasks' }],
+                [
+                  { text: '🔄 Refresh', callback_data: 'voting_tasks' },
+                  { text: '🔙 Back', callback_data: 'back_to_main' }
+                ]
+              ]
+            }
+          });
+        } else {
+          const task = availableVotingTasks[Math.floor(Math.random() * availableVotingTasks.length)] as any;
+          const remainingBudget = (task.totalBudget - task.totalSpent).toFixed(6);
+          const remainingClicks = Math.floor((task.totalBudget - task.totalSpent) / task.cpc);
+
+          const votingTaskMessage = `🗳️ Voting Task #${task.id}\n\n` +
+            `📝 Title: ${task.title}\n` +
+            `📄 Description: ${task.description}\n` +
+            `🔗 Link: ${task.link}\n\n` +
+            `💰 Reward: ${task.cpc.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+            `📊 Remaining Budget: ${remainingBudget} ${CONFIG.CURRENCY}\n` +
+            `🎯 Remaining Clicks: ${remainingClicks}\n\n` +
+            `📋 Instructions:\n` +
+            `1️⃣ Click "🗳️ Vote Now" button\n` +
+            `2️⃣ Complete the voting process\n` +
+            `3️⃣ Come back and click "✅ Task Complete"\n\n` +
+            `🎯 Available Tasks: ${availableVotingTasks.length}`;
+
+          bot.editMessageText(votingTaskMessage, {
+            chat_id: chatId,
+            message_id: query.message?.message_id,
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '⏭️ Skip Task', callback_data: 'voting_tasks' },
+                  { text: '🗳️ Vote Now', url: task.link }
+                ],
+                [{ text: '✅ Task Complete', callback_data: `complete_voting_task_${task.id}` }],
                 [{ text: '🔙 Back', callback_data: 'back_to_main' }]
               ]
             }
@@ -1040,13 +1127,15 @@ bot.on('callback_query', async (query) => {
           const siteTasks = allAvailableTasks.filter((ad: any) => ad.type === 'site_visits').length;
           const channelTasks = allAvailableTasks.filter((ad: any) => ad.type === 'join_channels').length;
           const botTasks = allAvailableTasks.filter((ad: any) => ad.type === 'join_bots').length;
+          const votingTasks = allAvailableTasks.filter((ad: any) => ad.type === 'voting_tasks').length;
           const totalEarnings = allAvailableTasks.reduce((sum: number, ad: any) => sum + ad.cpc, 0);
-          
+
           bot.editMessageText(`😄 All Available Tasks\n\n` +
             `📊 Task Summary:\n` +
             `🌐 Website Visits: ${siteTasks} tasks\n` +
             `👥 Channel Joins: ${channelTasks} tasks\n` +
-            `🤖 Bot Starts: ${botTasks} tasks\n\n` +
+            `🤖 Bot Starts: ${botTasks} tasks\n` +
+            `🗳️ Voting Tasks: ${votingTasks} tasks\n\n` +
             `💰 Total Potential Earnings: ${totalEarnings.toFixed(6)} ${CONFIG.CURRENCY}\n` +
             `🎯 Total Available Tasks: ${allAvailableTasks.length}\n\n` +
             `🚀 Choose a category to start earning!`, {
@@ -1060,8 +1149,9 @@ bot.on('callback_query', async (query) => {
                 ],
                 [
                   { text: `🤖 Bots (${botTasks})`, callback_data: 'join_bots' },
-                  { text: '🎁 Daily Bonus', callback_data: 'daily_bonus' }
+                  { text: `🗳️ Voting (${votingTasks})`, callback_data: 'voting_tasks' }
                 ],
+                [{ text: '🎁 Daily Bonus', callback_data: 'daily_bonus' }],
                 [{ text: '🔙 Back', callback_data: 'back_to_main' }]
               ]
             }
@@ -1078,7 +1168,7 @@ bot.on('callback_query', async (query) => {
           `🔗 Your Referral Link:\n${referralLink}\n\n` +
           `💡 Share your link and earn ${CONFIG.REF_BONUS} ${CONFIG.CURRENCY} for each person who joins!\n` +
           `🎯 Plus 20% from their task earnings!`;
-        
+
         bot.editMessageText(referralMessage, {
           chat_id: chatId,
           message_id: query.message?.message_id,
@@ -1110,7 +1200,7 @@ bot.on('callback_query', async (query) => {
           `📅 Joined: ${joinDate.toLocaleDateString()}\n\n` +
           `🔗 Your Referral Link:\n${referralLinkInfo}\n\n` +
           `💡 Earn ${CONFIG.REF_BONUS} ${CONFIG.CURRENCY} for each referral!`;
-        
+
         bot.editMessageText(infoMessage, {
           chat_id: chatId,
           message_id: query.message?.message_id,
@@ -1129,7 +1219,7 @@ bot.on('callback_query', async (query) => {
       case 'daily_bonus':
         const today = new Date().toDateString();
         const lastBonus = users[userId].lastDailyBonus;
-        
+
         if (lastBonus === today) {
           bot.answerCallbackQuery(query.id, { 
             text: '❌ Daily bonus already claimed today!',
@@ -1141,12 +1231,12 @@ bot.on('callback_query', async (query) => {
           users[userId].totalEarned += bonusAmount;
           users[userId].lastDailyBonus = today;
           saveData();
-          
+
           bot.answerCallbackQuery(query.id, { 
             text: `🎁 ${bonusAmount} ${CONFIG.CURRENCY} daily bonus claimed!`,
             show_alert: true 
           });
-          
+
           bot.editMessageText(`🎁 Daily Bonus Claimed Successfully!\n\n` +
             `💰 Bonus: ${bonusAmount} ${CONFIG.CURRENCY}\n` +
             `💎 New Balance: ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n\n` +
@@ -1177,7 +1267,7 @@ bot.on('callback_query', async (query) => {
           `🌐 Visit Sites - Earn by visiting websites\n` +
           `👥 Join Channels - Earn by joining channels\n` +
           `🤖 Join Bots - Earn by joining bots\n` +
-          `😄 More Tasks - More tasks and bonuses\n\n` +
+          `🗳️ Voting Tasks - Earn by completing voting tasks\n\n` +
           `📊 Create your own advertisements to grow your business!`;
 
         bot.editMessageText(welcomeMessage, {
@@ -1190,7 +1280,7 @@ bot.on('callback_query', async (query) => {
       // Admin callbacks
       case 'admin_users':
         if (userId !== ADMIN_ID) return bot.answerCallbackQuery(query.id, { text: 'Access denied' });
-        
+
         const totalUsers = Object.keys(users).length;
         const activeUsers = Object.values(users).filter((u: any) => u.isActive).length;
         const todayUsers = Object.values(users).filter((u: any) => {
@@ -1198,7 +1288,7 @@ bot.on('callback_query', async (query) => {
           const today = new Date();
           return joinDate.toDateString() === today.toDateString();
         }).length;
-        
+
         bot.editMessageText(`👥 User Statistics\n\n` +
           `📊 Total Users: ${totalUsers}\n` +
           `✅ Active Users: ${activeUsers}\n` +
@@ -1217,7 +1307,7 @@ bot.on('callback_query', async (query) => {
 
       case 'admin_deposits':
         if (userId !== ADMIN_ID) return bot.answerCallbackQuery(query.id, { text: 'Access denied' });
-        
+
         const pendingDeposits = Object.values(deposits).filter((d: any) => d.status === 'pending');
         if (pendingDeposits.length === 0) {
           bot.editMessageText(`💳 No Pending Deposits\n\n📊 ${CONFIG.BOT_NAME} Admin Panel`, {
@@ -1263,7 +1353,7 @@ bot.on('callback_query', async (query) => {
 
       case 'admin_withdrawals':
         if (userId !== ADMIN_ID) return bot.answerCallbackQuery(query.id, { text: 'Access denied' });
-        
+
         const pendingWithdrawals = Object.values(withdrawals).filter((w: any) => w.status === 'pending');
         if (pendingWithdrawals.length === 0) {
           bot.editMessageText(`🏧 No Pending Withdrawals\n\n📊 ${CONFIG.BOT_NAME} Admin Panel`, {
@@ -1309,7 +1399,7 @@ bot.on('callback_query', async (query) => {
 
       case 'admin_add_balance':
         if (userId !== ADMIN_ID) return bot.answerCallbackQuery(query.id, { text: 'Access denied' });
-        
+
         userStates[userId] = 'awaiting_user_id_for_balance';
         bot.editMessageText(`💰 Add Balance to User\n\n` +
           `📝 Enter User ID to add balance:\n\n` +
@@ -1327,7 +1417,7 @@ bot.on('callback_query', async (query) => {
 
       case 'admin_stats':
         if (userId !== ADMIN_ID) return bot.answerCallbackQuery(query.id, { text: 'Access denied' });
-        
+
         const totalUsersStats = Object.keys(users).length;
         const totalBalance = Object.values(users).reduce((sum: number, u: any) => sum + u.balance, 0);
         const totalEarned = Object.values(users).reduce((sum: number, u: any) => sum + u.totalEarned, 0);
@@ -1335,7 +1425,7 @@ bot.on('callback_query', async (query) => {
         const totalWithdrawn = Object.values(users).reduce((sum: number, u: any) => sum + u.totalWithdrawn, 0);
         const totalTasks = Object.values(users).reduce((sum: number, u: any) => sum + u.tasksCompleted, 0);
         const totalReferrals = Object.values(users).reduce((sum: number, u: any) => sum + u.referrals, 0);
-        
+
         bot.editMessageText(`📈 Platform Statistics\n\n` +
           `👥 Total Users: ${totalUsersStats}\n` +
           `💰 Total Balance: ${totalBalance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
@@ -1396,7 +1486,7 @@ bot.on('callback_query', async (query) => {
       const parts = data.split('_');
       const method = parts[3]; // binance or payeer
       const amount = parseFloat(parts[4]);
-      
+
       if (amount >= CONFIG.MIN_DEPOSIT && amount <= CONFIG.MAX_DEPOSIT) {
         processDepositAmount(chatId, userId, amount, method, query.message?.message_id);
       }
@@ -1407,7 +1497,7 @@ bot.on('callback_query', async (query) => {
       const parts = data.split('_');
       const method = parts[3]; // binance or payeer
       const amount = parseFloat(parts[4]);
-      
+
       if (amount >= CONFIG.MIN_WITHDRAW && amount <= Math.min(CONFIG.MAX_WITHDRAW, users[userId].balance)) {
         processWithdrawAmount(chatId, userId, amount, method, query.message?.message_id);
       }
@@ -1417,19 +1507,19 @@ bot.on('callback_query', async (query) => {
     if (data.startsWith('complete_task_')) {
       const taskId = data.split('_')[2];
       const task = advertisements[taskId];
-      
+
       if (task && task.status === 'active' && !users[userId].completedTasks.includes(taskId)) {
         // Check if budget is exhausted
         if (task.totalSpent + task.cpc > task.totalBudget) {
           // Mark ad as completed and inactive
           advertisements[taskId].status = 'completed';
           saveData();
-          
+
           bot.answerCallbackQuery(query.id, { 
             text: '❌ This advertisement has reached its budget limit!',
             show_alert: true 
           });
-          
+
           // Notify advertiser
           if (task.userId && users[task.userId]) {
             bot.sendMessage(task.userId, 
@@ -1443,7 +1533,7 @@ bot.on('callback_query', async (query) => {
           }
           return;
         }
-        
+
         // Enhanced verification for channel join tasks
         if (task.type === 'join_channels') {
           const hasJoinedChannel = await checkSpecificChannelMembership(userId, task.link);
@@ -1455,36 +1545,36 @@ bot.on('callback_query', async (query) => {
             return;
           }
         }
-        
+
         // Add reward
         users[userId].balance += task.cpc;
         users[userId].totalEarned += task.cpc;
         users[userId].tasksCompleted += 1;
         users[userId].completedTasks.push(taskId);
-        
+
         // Update ad stats
         advertisements[taskId].totalClicks += 1;
         advertisements[taskId].totalSpent += task.cpc;
         advertisements[taskId].spentToday += task.cpc;
-        
+
         // Check if budget is now exhausted
         if (advertisements[taskId].totalSpent >= advertisements[taskId].totalBudget) {
           advertisements[taskId].status = 'completed';
         }
-        
+
         // Give referral bonus to referrer
         if (users[userId].referrerId && users[users[userId].referrerId]) {
           const referralBonus = task.cpc * 0.20; // 20% referral bonus
           users[users[userId].referrerId].balance += referralBonus;
           users[users[userId].referrerId].totalEarned += referralBonus;
           users[users[userId].referrerId].totalReferralEarned = (users[users[userId].referrerId].totalReferralEarned || 0) + referralBonus;
-          
+
           bot.sendMessage(users[userId].referrerId, 
             `🎉 Referral Bonus!\n\n${users[userId].firstName} completed a task.\n💰 You earned ${referralBonus.toFixed(6)} ${CONFIG.CURRENCY} bonus!`);
         }
-        
+
         saveData();
-        
+
         bot.answerCallbackQuery(query.id, { 
           text: `✅ Task complete! Earned ${task.cpc.toFixed(6)} ${CONFIG.CURRENCY}!`,
           show_alert: true 
@@ -1494,7 +1584,7 @@ bot.on('callback_query', async (query) => {
         if (task.userId && users[task.userId]) {
           const remainingBudget = task.totalBudget - advertisements[taskId].totalSpent;
           const completionRate = ((advertisements[taskId].totalSpent / task.totalBudget) * 100).toFixed(1);
-          
+
           bot.sendMessage(task.userId, 
             `📈 New Click on Your Advertisement!\n\n` +
             `📊 Ad ID: ${taskId}\n` +
@@ -1513,14 +1603,14 @@ bot.on('callback_query', async (query) => {
     if (data.startsWith('set_ad_cpc_')) {
       const cpc = parseFloat(data.split('_')[3]);
       const tempAd = advertisements[`temp_${userId}`];
-      
+
       if (tempAd && cpc >= CONFIG.MIN_CPC && cpc <= CONFIG.MAX_CPC) {
         tempAd.cpc = cpc;
         userStates[userId] = `creating_ad_${tempAd.type}_temp_budget`;
-        
+
         const maxBudget = users[userId].balance;
         const estimatedClicks = Math.floor(maxBudget / cpc);
-        
+
         bot.editMessageText(`💎 Set Total Budget\n\n` +
           `Enter your total advertisement budget:\n\n` +
           `💰 Your Balance: ${maxBudget.toFixed(6)} ${CONFIG.CURRENCY}\n` +
@@ -1550,12 +1640,12 @@ bot.on('callback_query', async (query) => {
     if (data.startsWith('set_ad_budget_')) {
       const budget = parseFloat(data.split('_')[3]);
       const tempAd = advertisements[`temp_${userId}`];
-      
+
       if (tempAd && budget > 0 && budget <= users[userId].balance && budget >= tempAd.cpc) {
         // Create the advertisement
         const adId = Date.now().toString();
         const estimatedClicks = Math.floor(budget / tempAd.cpc);
-        
+
         advertisements[adId] = {
           id: adId,
           userId,
@@ -1573,20 +1663,20 @@ bot.on('callback_query', async (query) => {
           dailyBudget: budget,
           spentToday: 0
         };
-        
+
         // Deduct budget from user balance
         users[userId].balance -= budget;
         users[userId].adsCreated = (users[userId].adsCreated || 0) + 1;
-        
+
         // Clean up temp data
         delete advertisements[`temp_${userId}`];
         delete userStates[userId];
-        
+
         saveData();
-        
+
         const reminderMessage = tempAd.type === 'channel' ? 
           `\n\n⚠️ IMPORTANT REMINDER:\nYou must add ${CONFIG.BOT_USERNAME} as admin to your channel for task verification to work properly!` : '';
-        
+
         bot.editMessageText(`✅ Advertisement Created Successfully!\n\n` +
           `📊 Ad ID: ${adId}\n` +
           `📝 Title: ${tempAd.title}\n` +
@@ -1609,7 +1699,7 @@ bot.on('callback_query', async (query) => {
             ]
           }
         });
-        
+
         // Notify admin
         bot.sendMessage(ADMIN_ID, 
           `📢 New Advertisement Created - ${CONFIG.BOT_NAME}\n\n` +
@@ -1630,14 +1720,14 @@ bot.on('callback_query', async (query) => {
       if (userId !== ADMIN_ID) return;
       const depositId = data.split('_')[2];
       const action = data.split('_')[0];
-      
+
       if (deposits[depositId]) {
         if (action === 'approve') {
           deposits[depositId].status = 'approved';
           deposits[depositId].approvedAt = new Date().toISOString();
           users[deposits[depositId].userId].balance += deposits[depositId].amount;
           users[deposits[depositId].userId].totalDeposited += deposits[depositId].amount;
-          
+
           bot.sendMessage(deposits[depositId].userId, 
             `✅ Your ${deposits[depositId].amount} ${CONFIG.CURRENCY} deposit has been approved!\n\n` +
             `💰 New Balance: ${users[deposits[depositId].userId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
@@ -1647,7 +1737,7 @@ bot.on('callback_query', async (query) => {
         } else {
           deposits[depositId].status = 'rejected';
           deposits[depositId].rejectedAt = new Date().toISOString();
-          
+
           bot.sendMessage(deposits[depositId].userId, 
             `❌ Your ${deposits[depositId].amount} ${CONFIG.CURRENCY} deposit was rejected.\n\n` +
             `📞 Contact support: @Owner_Anas1\n` +
@@ -1655,7 +1745,7 @@ bot.on('callback_query', async (query) => {
         }
         saveData();
         bot.answerCallbackQuery(query.id, { text: `Deposit ${action}d successfully` });
-        
+
         // Show next pending deposit
         setTimeout(() => {
           bot.emit('callback_query', { ...query, data: 'admin_deposits' });
@@ -1667,13 +1757,13 @@ bot.on('callback_query', async (query) => {
       if (userId !== ADMIN_ID) return;
       const withdrawalId = data.split('_')[2];
       const action = data.split('_')[0];
-      
+
       if (withdrawals[withdrawalId]) {
         if (action === 'approve') {
           withdrawals[withdrawalId].status = 'approved';
           withdrawals[withdrawalId].approvedAt = new Date().toISOString();
           users[withdrawals[withdrawalId].userId].totalWithdrawn += withdrawals[withdrawalId].amount;
-          
+
           bot.sendMessage(withdrawals[withdrawalId].userId, 
             `✅ Your ${withdrawals[withdrawalId].amount} ${CONFIG.CURRENCY} withdrawal has been approved!\n\n` +
             `💳 Payment Method: ${withdrawals[withdrawalId].method}\n` +
@@ -1685,7 +1775,7 @@ bot.on('callback_query', async (query) => {
           withdrawals[withdrawalId].status = 'rejected';
           withdrawals[withdrawalId].rejectedAt = new Date().toISOString();
           users[withdrawals[withdrawalId].userId].balance += withdrawals[withdrawalId].amount; // Refund
-          
+
           bot.sendMessage(withdrawals[withdrawalId].userId, 
             `❌ Your ${withdrawals[withdrawalId].amount} ${CONFIG.CURRENCY} withdrawal was rejected.\n\n` +
             `💰 Amount refunded to your account.\n` +
@@ -1693,7 +1783,7 @@ bot.on('callback_query', async (query) => {
         }
         saveData();
         bot.answerCallbackQuery(query.id, { text: `Withdrawal ${action}d successfully` });
-        
+
         // Show next pending withdrawal
         setTimeout(() => {
           bot.emit('callback_query', { ...query, data: 'admin_withdrawals' });
@@ -1711,9 +1801,9 @@ bot.on('callback_query', async (query) => {
 const processDepositAmount = (chatId: number, userId: number, amount: number, method: string, messageId?: number) => {
   const methodName = method === 'binance' ? 'Binance Pay' : 'Payeer';
   const paymentId = method === 'binance' ? CONFIG.BINANCE_PAY_ID : CONFIG.PAYEER_ID;
-  
+
   userStates[userId] = `awaiting_deposit_proof_${method}_${amount}`;
-  
+
   const message = `💳 ${CONFIG.BOT_NAME} - ${methodName} Deposit\n\n` +
     `💰 Amount: ${amount} ${CONFIG.CURRENCY}\n` +
     `🆔 ${methodName} ID: \`${paymentId}\`\n\n` +
@@ -1757,9 +1847,9 @@ const processDepositAmount = (chatId: number, userId: number, amount: number, me
 // Function to process withdraw amount
 const processWithdrawAmount = (chatId: number, userId: number, amount: number, method: string, messageId?: number) => {
   const methodName = method === 'binance' ? 'Binance Pay' : 'Payeer';
-  
+
   userStates[userId] = `awaiting_withdraw_id_${method}_${amount}`;
-  
+
   const message = `🏧 ${CONFIG.BOT_NAME} - ${methodName} Withdrawal\n\n` +
     `💰 Withdrawal Amount: ${amount} ${CONFIG.CURRENCY}\n\n` +
     `💳 Enter your ${methodName} ID:\n\n` +
@@ -1798,13 +1888,13 @@ bot.on('message', (msg) => {
   if (!users[userId]) return;
 
   const userState = userStates[userId];
-  
+
   try {
     // Handle deposit amount input
     if (userState === 'awaiting_deposit_amount_binance' || userState === 'awaiting_deposit_amount_payeer') {
       const amount = parseFloat(text);
       const method = userState.includes('binance') ? 'binance' : 'payeer';
-      
+
       if (isNaN(amount) || amount < CONFIG.MIN_DEPOSIT || amount > CONFIG.MAX_DEPOSIT) {
         return bot.sendMessage(chatId, 
           `❌ Invalid amount.\n\nPlease enter a number between ${CONFIG.MIN_DEPOSIT} and ${CONFIG.MAX_DEPOSIT} ${CONFIG.CURRENCY}.\n\n💡 Example: 10 or 25.50`);
@@ -1817,7 +1907,7 @@ bot.on('message', (msg) => {
     else if (userState === 'awaiting_withdraw_amount_binance' || userState === 'awaiting_withdraw_amount_payeer') {
       const amount = parseFloat(text);
       const method = userState.includes('binance') ? 'binance' : 'payeer';
-      
+
       if (isNaN(amount) || amount < CONFIG.MIN_WITHDRAW || amount > Math.min(CONFIG.MAX_WITHDRAW, users[userId].balance)) {
         return bot.sendMessage(chatId, 
           `❌ Invalid amount.\n\nPlease enter a number between ${CONFIG.MIN_WITHDRAW} and ${Math.min(CONFIG.MAX_WITHDRAW, users[userId].balance).toFixed(6)} ${CONFIG.CURRENCY}.\n\n💰 Your Balance: ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY}`);
@@ -1832,7 +1922,7 @@ bot.on('message', (msg) => {
       const method = parts[3] === 'binance' ? 'Binance Pay' : 'Payeer';
       const amount = parseFloat(parts[4]);
       const paymentId = text.trim();
-      
+
       if (!paymentId || paymentId.length < 5) {
         return bot.sendMessage(chatId, '❌ Please enter a valid payment ID.\n\n💡 Must be at least 5 characters long.');
       }
@@ -1871,7 +1961,7 @@ bot.on('message', (msg) => {
             ]
           }
         });
-      
+
       // Notify admin with detailed info
       const user = users[userId];
       const adminNotification = `🏧 New Withdrawal Request - ${CONFIG.BOT_NAME}\n\n` +
@@ -1885,7 +1975,7 @@ bot.on('message', (msg) => {
         `📈 Total Earned: ${user.totalEarned.toFixed(6)} ${CONFIG.CURRENCY}\n` +
         `✅ Completed Tasks: ${user.tasksCompleted}\n` +
         `📅 Request Time: ${new Date().toLocaleString()}`;
-      
+
       bot.sendMessage(ADMIN_ID, adminNotification, {
         reply_markup: {
           inline_keyboard: [
@@ -1907,7 +1997,7 @@ bot.on('message', (msg) => {
       const parts = userState.split('_');
       const method = parts[3] === 'binance' ? 'Binance Pay' : 'Payeer';
       const amount = parseFloat(parts[4]);
-      
+
       const depositId = Date.now().toString();
       deposits[depositId] = {
         id: depositId,
@@ -1940,7 +2030,7 @@ bot.on('message', (msg) => {
             ]
           }
         });
-      
+
       // Notify admin with detailed info
       const user = users[userId];
       const adminNotification = `💳 New Deposit Request - ${CONFIG.BOT_NAME}\n\n` +
@@ -1953,7 +2043,7 @@ bot.on('message', (msg) => {
         `💰 Current Balance: ${user.balance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
         `📈 Total Earned: ${user.totalEarned.toFixed(6)} ${CONFIG.CURRENCY}\n` +
         `📅 Request Time: ${new Date().toLocaleString()}`;
-      
+
       bot.sendMessage(ADMIN_ID, adminNotification, {
         reply_markup: {
           inline_keyboard: [
@@ -1973,7 +2063,7 @@ bot.on('message', (msg) => {
     // Handle admin balance addition
     else if (userState === 'awaiting_user_id_for_balance') {
       if (userId !== ADMIN_ID) return;
-      
+
       const targetUserId = parseInt(text);
       if (isNaN(targetUserId) || !users[targetUserId]) {
         return bot.sendMessage(chatId, '❌ Invalid User ID. User not found.');
@@ -2006,10 +2096,10 @@ bot.on('message', (msg) => {
     // Handle balance amount input
     else if (userState && userState.startsWith('awaiting_balance_amount_')) {
       if (userId !== ADMIN_ID) return;
-      
+
       const targetUserId = parseInt(userState.split('_')[3]);
       const amount = parseFloat(text);
-      
+
       if (isNaN(amount) || amount <= 0) {
         return bot.sendMessage(chatId, '❌ Invalid amount. Please enter a positive number.');
       }
@@ -2025,7 +2115,7 @@ bot.on('message', (msg) => {
         `🆔 User ID: ${targetUserId}\n` +
         `💰 Added: ${amount} ${CONFIG.CURRENCY}\n` +
         `💎 New Balance: ${users[targetUserId].balance.toFixed(6)} ${CONFIG.CURRENCY}`);
-      
+
       // Notify user
       bot.sendMessage(targetUserId, 
         `🎉 Balance Added by Admin!\n\n` +
@@ -2034,20 +2124,124 @@ bot.on('message', (msg) => {
         `🙏 Thank you for using ${CONFIG.BOT_NAME}!`);
     }
 
-    // Advertisement creation handlers
+    // Handle voting proof submission
+    else if (userState && userState.startsWith('awaiting_voting_proof_')) {
+      const taskId = userState.split('_')[3];
+      const task = advertisements[taskId];
+
+      if (task && task.status === 'active') {
+        // Auto-approve voting task
+        users[userId].balance += task.cpc;
+        users[userId].totalEarned += task.cpc;
+        users[userId].tasksCompleted += 1;
+        users[userId].completedTasks.push(taskId);
+
+        // Update ad stats
+        advertisements[taskId].totalClicks += 1;
+        advertisements[taskId].totalSpent += task.cpc;
+        advertisements[taskId].spentToday += task.cpc;
+
+        // Add admin commission
+        if (!users[ADMIN_ID]) {
+          users[ADMIN_ID] = {
+            id: ADMIN_ID,
+            username: 'Owner_Anas1',
+            firstName: 'Bot Owner',
+            balance: 0,
+            referrals: 0,
+            referrerId: null,
+            joinedAt: new Date().toISOString(),
+            totalEarned: 0,
+            tasksCompleted: 0,
+            completedTasks: [],
+            totalDeposited: 0,
+            totalWithdrawn: 0,
+            adsCreated: 0,
+            isActive: true,
+            lastDailyBonus: null,
+            totalReferralEarned: 0
+          };
+        }
+
+        users[ADMIN_ID].balance += CONFIG.ADMIN_COMMISSION;
+        users[ADMIN_ID].totalEarned += CONFIG.ADMIN_COMMISSION;
+
+        // Check if budget is exhausted
+        if (advertisements[taskId].totalSpent >= advertisements[taskId].totalBudget) {
+          advertisements[taskId].status = 'completed';
+        }
+
+        // Give referral bonus
+        if (users[userId].referrerId && users[users[userId].referrerId]) {
+          const referralBonus = task.cpc * 0.20;
+          users[users[userId].referrerId].balance += referralBonus;
+          users[users[userId].referrerId].totalEarned += referralBonus;
+          users[users[userId].referrerId].totalReferralEarned = (users[users[userId].referrerId].totalReferralEarned || 0) + referralBonus;
+
+          bot.sendMessage(users[userId].referrerId, 
+            `🎉 Referral Bonus!\n\n${users[userId].firstName} completed a voting task.\n💰 You earned ${referralBonus.toFixed(6)} ${CONFIG.CURRENCY} bonus!`);
+        }
+
+        delete userStates[userId];
+        saveData();
+
+        bot.sendMessage(chatId, 
+          `✅ Voting Task Completed & Auto-Verified!\n\n` +
+          `🗳️ Task: ${task.title}\n` +
+          `💰 Reward: ${task.cpc.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+          `💎 New Balance: ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n\n` +
+          `⚡ Auto-verification successful!\n` +
+          `🎯 Admin Commission: ${CONFIG.ADMIN_COMMISSION.toFixed(6)} ${CONFIG.CURRENCY}`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '🗳️ More Voting Tasks', callback_data: 'voting_tasks' },
+                  { text: '💰 Balance', callback_data: 'balance' }
+                ],
+                [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+              ]
+            }
+          });
+
+        // Notify task owner
+        if (task.userId && users[task.userId]) {
+          const remainingBudget = task.totalBudget - advertisements[taskId].totalSpent;
+
+          bot.sendMessage(task.userId, 
+            `📈 New Vote on Your Task!\n\n` +
+            `🗳️ Task: ${task.title}\n` +
+            `💰 Cost: ${task.cpc.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+            `📊 Total Votes: ${advertisements[taskId].totalClicks}\n` +
+            `💵 Total Spent: ${advertisements[taskId].totalSpent.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+            `💎 Remaining Budget: ${remainingBudget.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+            `✅ Auto-verified completion`);
+        }
+
+        // Notify admin about commission
+        bot.sendMessage(ADMIN_ID, 
+          `💰 Commission Earned!\n\n` +
+          `🗳️ Voting task completed by ${users[userId].firstName}\n` +
+          `💵 Commission: ${CONFIG.ADMIN_COMMISSION.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+          `💎 Total Balance: ${users[ADMIN_ID].balance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+          `📈 Total Earned: ${users[ADMIN_ID].totalEarned.toFixed(6)} ${CONFIG.CURRENCY}`);
+      }
+    }
+
+    // Handle advertisement creation handlers
     else if (userState && userState.startsWith('creating_ad_')) {
-      const adType = userState.split('_')[2]; // channel, site, bot
+      const adType = userState.split('_')[2]; // channel, site, bot, voting
       const step = userState.split('_')[4]; // title, description, link, cpc, budget
-      
+
       // Handle title input
       if (step === 'title') {
         if (!text || text.length > 50) {
           return bot.sendMessage(chatId, '❌ Title must be 1-50 characters long. Please try again.');
         }
-        
+
         userStates[userId] = `creating_ad_${adType}_temp_description`;
         advertisements[`temp_${userId}`] = { title: text, type: adType };
-        
+
         bot.sendMessage(chatId, 
           `📝 Advertisement Description\n\n` +
           `Enter a detailed description for your advertisement:\n\n` +
@@ -2062,23 +2256,23 @@ bot.on('message', (msg) => {
             }
           });
       }
-      
+
       // Handle description input
       else if (step === 'description') {
         if (!text || text.length > 200) {
           return bot.sendMessage(chatId, '❌ Description must be 1-200 characters long. Please try again.');
         }
-        
+
         advertisements[`temp_${userId}`].description = text;
         userStates[userId] = `creating_ad_${adType}_temp_link`;
-        
-        const linkType = adType === 'channel' ? 'channel' : adType === 'site' ? 'website' : 'bot';
+
+        const linkType = adType === 'channel' ? 'channel' : adType === 'site' ? 'website' : adType === 'voting' ? 'voting' : 'bot';
         const linkExample = adType === 'channel' ? 'https://t.me/yourchannel' : 
-                           adType === 'site' ? 'https://yourwebsite.com' : 'https://t.me/yourbot';
-        
+                           adType === 'site' ? 'https://yourwebsite.com' : adType === 'voting' ? 'https://example.com/vote' : 'https://t.me/yourbot';
+
         const channelReminder = adType === 'channel' ? 
           `\n\n⚠️ IMPORTANT: After creating this ad, you must add ${CONFIG.BOT_USERNAME} as admin to your channel!` : '';
-        
+
         bot.sendMessage(chatId, 
           `🔗 ${linkType.charAt(0).toUpperCase() + linkType.slice(1)} Link\n\n` +
           `Enter your ${linkType} link:\n\n` +
@@ -2092,16 +2286,16 @@ bot.on('message', (msg) => {
             }
           });
       }
-      
+
       // Handle link input
       else if (step === 'link') {
         if (!text || !text.startsWith('http')) {
           return bot.sendMessage(chatId, '❌ Please enter a valid URL starting with http:// or https://');
         }
-        
+
         advertisements[`temp_${userId}`].link = text;
         userStates[userId] = `creating_ad_${adType}_temp_cpc`;
-        
+
         bot.sendMessage(chatId, 
           `💰 Set CPC (Cost Per Click)\n\n` +
           `Enter CPC rate (${CONFIG.MIN_CPC} - ${CONFIG.MAX_CPC} ${CONFIG.CURRENCY}):\n\n` +
@@ -2124,7 +2318,7 @@ bot.on('message', (msg) => {
             }
           });
       }
-      
+
       // Handle CPC input
       else if (step === 'cpc') {
         const cpc = parseFloat(text);
@@ -2132,13 +2326,13 @@ bot.on('message', (msg) => {
           return bot.sendMessage(chatId, 
             `❌ Invalid CPC rate.\n\nPlease enter a number between ${CONFIG.MIN_CPC} and ${CONFIG.MAX_CPC} ${CONFIG.CURRENCY}`);
         }
-        
+
         advertisements[`temp_${userId}`].cpc = cpc;
         userStates[userId] = `creating_ad_${adType}_temp_budget`;
-        
+
         const maxBudget = users[userId].balance;
         const estimatedClicks = Math.floor(maxBudget / cpc);
-        
+
         bot.sendMessage(chatId, 
           `💎 Set Total Budget\n\n` +
           `Enter your total advertisement budget:\n\n` +
@@ -2162,26 +2356,26 @@ bot.on('message', (msg) => {
             }
           });
       }
-      
+
       // Handle budget input
       else if (step === 'budget') {
         const budget = parseFloat(text);
         const tempAd = advertisements[`temp_${userId}`];
-        
+
         if (isNaN(budget) || budget <= 0 || budget > users[userId].balance) {
           return bot.sendMessage(chatId, 
             `❌ Invalid budget.\n\nPlease enter a valid amount (0.001 - ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY})`);
         }
-        
+
         if (budget < tempAd.cpc) {
           return bot.sendMessage(chatId, 
             `❌ Budget must be at least ${tempAd.cpc.toFixed(6)} ${CONFIG.CURRENCY} (1 click)\n\nPlease enter a higher amount.`);
         }
-        
+
         // Create the advertisement
         const adId = Date.now().toString();
         const estimatedClicks = Math.floor(budget / tempAd.cpc);
-        
+
         advertisements[adId] = {
           id: adId,
           userId,
@@ -2189,7 +2383,8 @@ bot.on('message', (msg) => {
           description: tempAd.description,
           link: tempAd.link,
           type: tempAd.type === 'channel' ? 'join_channels' : 
-                tempAd.type === 'site' ? 'site_visits' : 'join_bots',
+                tempAd.type === 'site' ? 'site_visits' : 
+                tempAd.type === 'voting' ? 'voting_tasks' : 'join_bots',
           cpc: tempAd.cpc,
           totalBudget: budget,
           totalSpent: 0,
@@ -2199,20 +2394,20 @@ bot.on('message', (msg) => {
           dailyBudget: budget,
           spentToday: 0
         };
-        
+
         // Deduct budget from user balance
         users[userId].balance -= budget;
         users[userId].adsCreated = (users[userId].adsCreated || 0) + 1;
-        
+
         // Clean up temp data
         delete advertisements[`temp_${userId}`];
         delete userStates[userId];
-        
+
         saveData();
-        
+
         const reminderMessage = tempAd.type === 'channel' ? 
           `\n\n⚠️ IMPORTANT REMINDER:\nYou must add ${CONFIG.BOT_USERNAME} as admin to your channel for task verification to work properly!` : '';
-        
+
         bot.sendMessage(chatId, 
           `✅ Advertisement Created Successfully!\n\n` +
           `📊 Ad ID: ${adId}\n` +
@@ -2235,7 +2430,7 @@ bot.on('message', (msg) => {
               ]
             }
           });
-        
+
         // Notify admin
         bot.sendMessage(ADMIN_ID, 
           `📢 New Advertisement Created - ${CONFIG.BOT_NAME}\n\n` +
@@ -2261,17 +2456,17 @@ bot.on('message', (msg) => {
 bot.on('photo', (msg) => {
   const chatId = msg.chat.id;
   const userId = msg.from?.id!;
-  
+
   if (!users[userId]) return;
-  
+
   const userState = userStates[userId];
-  
+
   if (userState && userState.startsWith('awaiting_deposit_proof_')) {
     // Handle as deposit proof (same logic as text message)
     const parts = userState.split('_');
     const method = parts[3] === 'binance' ? 'Binance Pay' : 'Payeer';
     const amount = parseFloat(parts[4]);
-    
+
     const depositId = Date.now().toString();
     deposits[depositId] = {
       id: depositId,
@@ -2305,7 +2500,7 @@ bot.on('photo', (msg) => {
           ]
         }
       });
-    
+
     // Forward photo to admin with details
     const user = users[userId];
     const adminNotification = `💳 New Deposit (with Screenshot) - ${CONFIG.BOT_NAME}\n\n` +
@@ -2316,10 +2511,10 @@ bot.on('photo', (msg) => {
       `🔗 Request ID: ${depositId}\n` +
       `💰 Current Balance: ${user.balance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
       `📅 Request Time: ${new Date().toLocaleString()}`;
-    
+
     // First forward the photo
     bot.forwardMessage(ADMIN_ID, chatId, msg.message_id);
-    
+
     // Then send the details with buttons
     bot.sendMessage(ADMIN_ID, adminNotification, {
       reply_markup: {
@@ -2337,6 +2532,132 @@ bot.on('photo', (msg) => {
     });
   }
 });
+
+// Handle callback queries
+bot.on('callback_query', async (query) => {
+  const chatId = query.message?.chat.id!;
+  const userId = query.from.id;
+  const data = query.data;
+
+  if (!users[userId] && !data?.startsWith('check_membership')) {
+    return bot.answerCallbackQuery(query.id, { text: 'Please start the bot first with /start' });
+  }
+
+  try {
+     if (data.startsWith('complete_voting_task_')) {
+      const taskId = data.split('_')[3]; // Extract task ID
+      userStates[userId] = `awaiting_voting_proof_${taskId}`;
+
+      bot.answerCallbackQuery(query.id, {
+        text: '✅ Task completion initiated! Please wait for auto-verification...',
+        show_alert: true
+      });
+    }
+
+    switch (data) {
+      case 'check_membership':
+      case (data?.match(/^check_membership_/) || {}).input:
+        const referrerIdFromCallback = data.includes('_') ? data.split('_')[2] : null;
+        const referrerId = referrerIdFromCallback !== 'none' ? parseInt(referrerIdFromCallback) : null;
+
+        const hasJoined = await checkChannelMembership(userId);
+        if (hasJoined) {
+          bot.answerCallbackQuery(query.id, { text: '✅ Membership confirmed!' });
+
+          // Register user now with referral
+          if (!users[userId]) {
+            const username = query.from.username || '';
+            const firstName = query.from.first_name || 'User';
+
+            users[userId] = {
+              id: userId,
+              username,
+              firstName,
+              balance: 0,
+              referrals: 0,
+              referrerId,
+              joinedAt: new Date().toISOString(),
+              totalEarned: 0,
+              tasksCompleted: 0,
+              completedTasks: [],
+              totalDeposited: 0,
+              totalWithdrawn: 0,
+              adsCreated: 0,
+              isActive: true,
+              lastDailyBonus: null,
+              totalReferralEarned: 0
+            };
+
+            // Give referral bonus
+            if (referrerId && users[referrerId]) {
+              users[referrerId].balance += CONFIG.REF_BONUS;
+              users[referrerId].referrals += 1;
+              users[referrerId].totalEarned += CONFIG.REF_BONUS;
+              users[referrerId].totalReferralEarned = (users[referrerId].totalReferralEarned || 0) + CONFIG.REF_BONUS;
+
+              // Notify referrer
+              bot.sendMessage(referrerId, 
+                `🎉 New Referral Joined!\n\n` +
+                `👤 ${firstName} joined using your link\n` +
+                `💰 You earned ${CONFIG.REF_BONUS} ${CONFIG.CURRENCY} bonus!\n\n` +
+                `🔗 Keep referring to earn more!`);
+            }
+
+            saveData();
+          }
+
+          setTimeout(() => {
+            const welcomeMessage = `🎉 Welcome ${query.from.first_name}!\n` +
+              `💎 Welcome to ${CONFIG.BOT_NAME} CPC Platform\n\n` +
+              `💰 Your Balance: ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+              `👥 Referrals: ${users[userId].referrals} people\n` +
+              `🎯 Completed Tasks: ${users[userId].tasksCompleted} tasks\n\n` +
+              `🚀 Easy ways to earn money:\n\n` +
+              `🌐 Visit Sites - Earn by visiting websites\n` +
+              `👥 Join Channels - Earn by joining channels\n` +
+              `🤖 Join Bots - Earn by joining bots\n` +
+              `🗳️ Voting Tasks - Earn by completing voting tasks\n\n` +
+              `📊 Create your own advertisements to grow your business!`;
+
+            bot.editMessageText(welcomeMessage, {
+              chat_id: chatId,
+              message_id: query.message?.message_id,
+              ...getMainKeyboard()
+            });
+          }, 1000);
+        } else {
+          bot.answerCallbackQuery(query.id, { text: '❌ Please join all channels first!' });
+        }
+        break;
+         case 'ad_voting_tasks':
+        if (users[userId].balance < CONFIG.MIN_CPC) {
+          bot.answerCallbackQuery(query.id, { 
+            text: `❌ Minimum balance required: ${CONFIG.MIN_CPC} ${CONFIG.CURRENCY}`,
+            show_alert: true 
+          });
+        } else {
+          userStates[userId] = 'creating_ad_voting_tasks_title';
+          bot.editMessageText(`🗳️ Create Voting Tasks Advertisement\n\n` +
+            `📝 Enter advertisement title:\n\n` +
+            `💡 Example: "Vote for our project and get reward!"\n` +
+            `📏 Maximum 50 characters\n\n` +
+            `⚠️ Make sure your title is attractive and clear`, {
+            chat_id: chatId,
+            message_id: query.message?.message_id,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🔙 Back', callback_data: 'advertise' }]
+              ]
+            }
+          });
+        }
+        break;
+  }
+   } catch (error) {
+    console.error('Error handling callback query:', error);
+    bot.answerCallbackQuery(query.id, { text: 'An error occurred. Please try again.' });
+  }
+  });
 
 // Error handling
 bot.on('polling_error', (error) => {
