@@ -30,7 +30,8 @@ const CONFIG = {
   PAYEER_ID: 'P1102512228',
   BOT_USERNAME: '@task_cpbot',
   BOT_NAME: 'AnasCP',
-  ADMIN_COMMISSION: 0.0001
+  ADMIN_COMMISSION: 0.0001,
+  MIN_BUDGET: 0.10
 };
 
 // Data storage
@@ -710,8 +711,8 @@ bot.on('callback_query', async (query) => {
         } else {
           userStates[userId] = 'creating_ad_channel_members_title';
           bot.editMessageText(`👥 Create Channel Members Advertisement\n\n` +
-            `📝 Enter advertisement title:\n\n` +
-            `💡 Example: "Join our amazing cryptochannel!"\n` +
+            `📝 Enter advertisement title:\n\n```python
+`💡 Example: "Join our amazing cryptochannel!"\n` +
             `📏 Maximum 50 characters\n\n` +
             `⚠️ IMPORTANT: After creating this ad, you MUST add ${CONFIG.BOT_USERNAME} as admin to your channel so we can verify if users actually joined!\n\n` +
             `🔧 Add ${CONFIG.BOT_USERNAME} as admin in your channel`, {
@@ -775,9 +776,9 @@ bot.on('callback_query', async (query) => {
         break;
 
       case 'ad_voting_tasks':
-        if (users[userId].balance < CONFIG.MIN_CPC) {
+        if (users[userId].balance < CONFIG.MIN_BUDGET) {
           bot.answerCallbackQuery(query.id, { 
-            text: `❌ Minimum balance required: ${CONFIG.MIN_CPC} ${CONFIG.CURRENCY}`,
+            text: `❌ Minimum balance required: ${CONFIG.MIN_BUDGET} ${CONFIG.CURRENCY}`,
             show_alert: true 
           });
         } else {
@@ -1397,7 +1398,8 @@ bot.on('callback_query', async (query) => {
         }
         break;
 
-      case 'admin_add_balance':
+      case 'admin```python
+_add_balance':
         if (userId !== ADMIN_ID) return bot.answerCallbackQuery(query.id, { text: 'Access denied' });
 
         userStates[userId] = 'awaiting_user_id_for_balance';
@@ -2089,6 +2091,7 @@ bot.on('message', (msg) => {
               ],
               [{ text: '🔙 Back', callback_data: 'admin_back' }]
             ]
+```python
           }
         });
     }
@@ -2630,9 +2633,9 @@ bot.on('callback_query', async (query) => {
         }
         break;
          case 'ad_voting_tasks':
-        if (users[userId].balance < CONFIG.MIN_CPC) {
+        if (users[userId].balance < CONFIG.MIN_BUDGET) {
           bot.answerCallbackQuery(query.id, { 
-            text: `❌ Minimum balance required: ${CONFIG.MIN_CPC} ${CONFIG.CURRENCY}`,
+            text: `❌ Minimum balance required: ${CONFIG.MIN_BUDGET} ${CONFIG.CURRENCY}`,
             show_alert: true 
           });
         } else {
