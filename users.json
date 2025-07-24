@@ -17,19 +17,22 @@
     "id": 8017773342,
     "username": "Owner_USDTBot",
     "firstName": "USDT",
-    "balance": 0,
+    "balance": 0.01,
     "referrals": 0,
     "referrerId": null,
     "joinedAt": "2025-07-24T06:11:31.929Z",
-    "totalEarned": 0,
-    "tasksCompleted": 0,
-    "completedTasks": []
+    "totalEarned": 0.01,
+    "tasksCompleted": 2,
+    "completedTasks": [
+      "1753350042514",
+      "1753346987240"
+    ]
   },
   "6371949611": {
     "id": 6371949611,
     "username": "Habib12ry",
     "firstName": "ABX",
-    "balance": 20.006,
+    "balance": 19.756,
     "referrals": 0,
     "referrerId": 7391363898,
     "joinedAt": "2025-07-24T08:51:32.553Z",
@@ -40,7 +43,7 @@
     ],
     "totalDeposited": 25,
     "totalWithdrawn": 5,
-    "adsCreated": 0,
+    "adsCreated": 1,
     "isActive": true,
     "lastDailyBonus": "Thu Jul 24 2025",
     "totalReferralEarned": 0
