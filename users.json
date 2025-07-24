@@ -9,5 +9,17 @@
     "joinedAt": "2025-07-24T05:31:20.647Z",
     "totalEarned": 0,
     "tasksCompleted": 0
+  },
+  "8017773342": {
+    "id": 8017773342,
+    "username": "Owner_USDTBot",
+    "firstName": "USDT",
+    "balance": 0,
+    "referrals": 0,
+    "referrerId": null,
+    "joinedAt": "2025-07-24T06:11:31.929Z",
+    "totalEarned": 0,
+    "tasksCompleted": 0,
+    "completedTasks": []
   }
 }
