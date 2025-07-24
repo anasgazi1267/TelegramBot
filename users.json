@@ -3,13 +3,15 @@
     "id": 7391363898,
     "username": "Owner_Anas1",
     "firstName": "Anas",
-    "balance": 0.2,
-    "referrals": 0,
+    "balance": 0.021,
+    "referrals": 1,
     "referrerId": null,
     "joinedAt": "2025-07-24T05:31:20.647Z",
-    "totalEarned": 0,
+    "totalEarned": 0.021,
     "tasksCompleted": 0,
-    "totalDeposited": null
+    "totalDeposited": null,
+    "adsCreated": 1,
+    "totalReferralEarned": null
   },
   "8017773342": {
     "id": 8017773342,
@@ -22,5 +24,25 @@
     "totalEarned": 0,
     "tasksCompleted": 0,
     "completedTasks": []
+  },
+  "6371949611": {
+    "id": 6371949611,
+    "username": "Habib12ry",
+    "firstName": "ABX",
+    "balance": 20.006,
+    "referrals": 0,
+    "referrerId": 7391363898,
+    "joinedAt": "2025-07-24T08:51:32.553Z",
+    "totalEarned": 0.006,
+    "tasksCompleted": 1,
+    "completedTasks": [
+      "1753346987240"
+    ],
+    "totalDeposited": 25,
+    "totalWithdrawn": 0,
+    "adsCreated": 0,
+    "isActive": true,
+    "lastDailyBonus": "Thu Jul 24 2025",
+    "totalReferralEarned": 0
   }
 }

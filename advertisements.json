@@ -1,1 +1,18 @@
-{}
+{
+  "1753346987240": {
+    "id": "1753346987240",
+    "userId": 7391363898,
+    "title": "Test",
+    "description": "Join my website ☺️☺️☺️☺️☺️☺️☺️☺️☺️☺️",
+    "link": "https://t.me/AnasEarnHunter",
+    "type": "join_channels",
+    "cpc": 0.005,
+    "totalBudget": 0.2,
+    "totalSpent": 0.005,
+    "totalClicks": 1,
+    "status": "active",
+    "createdAt": "2025-07-24T08:49:47.240Z",
+    "dailyBudget": 0.2,
+    "spentToday": 0.005
+  }
+}

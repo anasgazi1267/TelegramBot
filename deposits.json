@@ -8,5 +8,16 @@
     "createdAt": "2025-07-24T07:59:43.150Z",
     "proof": "text_provided",
     "approvedAt": "2025-07-24T07:59:55.775Z"
+  },
+  "1753347226107": {
+    "id": "1753347226107",
+    "userId": 6371949611,
+    "amount": 25,
+    "method": "Payeer",
+    "status": "approved",
+    "createdAt": "2025-07-24T08:53:46.107Z",
+    "proof": "photo_provided",
+    "photoId": "AgACAgUAAxkBAAIBrGiB9JnIJLK0rqWX40Vlj6a_p1mbAAI0xTEbQPUQVB5MxUsHeGprAQADAgADeQADNgQ",
+    "approvedAt": "2025-07-24T08:54:11.767Z"
   }
 }
