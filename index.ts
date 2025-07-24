@@ -31,6 +31,8 @@ let users: any = {};
 let tasks: any = {};
 let withdrawals: any = {};
 let deposits: any = {};
+let advertisements: any = {};
+let userStates: any = {};
 
 // Load data
 const loadData = () => {
@@ -39,6 +41,7 @@ const loadData = () => {
     if (fs.existsSync('tasks.json')) tasks = JSON.parse(fs.readFileSync('tasks.json', 'utf8'));
     if (fs.existsSync('withdrawals.json')) withdrawals = JSON.parse(fs.readFileSync('withdrawals.json', 'utf8'));
     if (fs.existsSync('deposits.json')) deposits = JSON.parse(fs.readFileSync('deposits.json', 'utf8'));
+    if (fs.existsSync('advertisements.json')) advertisements = JSON.parse(fs.readFileSync('advertisements.json', 'utf8'));
   } catch (error) {
     console.log('No existing data files found, starting fresh');
   }
@@ -50,6 +53,7 @@ const saveData = () => {
   fs.writeFileSync('tasks.json', JSON.stringify(tasks, null, 2));
   fs.writeFileSync('withdrawals.json', JSON.stringify(withdrawals, null, 2));
   fs.writeFileSync('deposits.json', JSON.stringify(deposits, null, 2));
+  fs.writeFileSync('advertisements.json', JSON.stringify(advertisements, null, 2));
 };
 
 // Initialize bot
@@ -75,33 +79,78 @@ const generateReferralLink = (userId: number): string => {
   return `https://t.me/task_cpbot?start=${userId}`;
 };
 
-// Main keyboard
+// Main keyboard with inline buttons
 const getMainKeyboard = () => {
   return {
     reply_markup: {
-      keyboard: [
-        ['💰 Balance', '👥 Referrals'],
-        ['📢 Tasks', '💳 Deposit'],
-        ['🏧 Withdraw', '📊 Profile'],
-        ['📞 Support']
-      ],
-      resize_keyboard: true
+      inline_keyboard: [
+        [
+          { text: '💰 Balance', callback_data: 'balance' },
+          { text: '👥 Referrals', callback_data: 'referrals' }
+        ],
+        [
+          { text: '📱 Visit Sites', callback_data: 'visit_sites' },
+          { text: '👥 Join Channels', callback_data: 'join_channels' }
+        ],
+        [
+          { text: '🤖 Join Bots', callback_data: 'join_bots' },
+          { text: '😄 More', callback_data: 'more_tasks' }
+        ],
+        [
+          { text: '📊 Advertise 📊', callback_data: 'advertise' }
+        ],
+        [
+          { text: '💳 Deposit', callback_data: 'deposit' },
+          { text: '🏧 Withdraw', callback_data: 'withdraw' }
+        ],
+        [
+          { text: 'ℹ️ Info', callback_data: 'info' }
+        ]
+      ]
     }
   };
 };
 
-// Admin keyboard
-const getAdminKeyboard = () => {
+// Advertise keyboard
+const getAdvertiseKeyboard = () => {
   return {
     reply_markup: {
-      keyboard: [
-        ['📊 Total Users', '💸 Set Platform Fee'],
-        ['🎁 Set Ref Bonus', '💬 Broadcast'],
-        ['💳 Set Binance ID', '✅ Approve Withdrawals'],
-        ['💰 Approve Deposits', '📢 Manage Tasks'],
-        ['👤 User Menu']
-      ],
-      resize_keyboard: true
+      inline_keyboard: [
+        [
+          { text: '👥 Channel Members', callback_data: 'ad_channel_members' },
+          { text: '💬 Group Members', callback_data: 'ad_group_members' }
+        ],
+        [
+          { text: '🤖 Bot', callback_data: 'ad_bot' }
+        ],
+        [
+          { text: '📊 Post Views', callback_data: 'ad_post_views' },
+          { text: '🔗 Link Visits', callback_data: 'ad_link_visits' }
+        ],
+        [
+          { text: '🐦 Twitter Engagement', callback_data: 'ad_twitter' }
+        ],
+        [
+          { text: '🔙 Back', callback_data: 'back_to_main' }
+        ]
+      ]
+    }
+  };
+};
+
+// More tasks keyboard
+const getMoreTasksKeyboard = () => {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '📊 TG Post Views', callback_data: 'tg_post_views' },
+          { text: '🐦 Twitter Raids', callback_data: 'twitter_raids' }
+        ],
+        [
+          { text: '🔙 Back', callback_data: 'back_to_main' }
+        ]
+      ]
     }
   };
 };
@@ -153,7 +202,8 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
       referrerId,
       joinedAt: new Date().toISOString(),
       totalEarned: 0,
-      tasksCompleted: 0
+      tasksCompleted: 0,
+      completedTasks: []
     };
 
     // Give referral bonus
@@ -190,132 +240,428 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
   }
 
   const welcomeMessage = `🎉 Welcome ${firstName}!\n\n` +
-    `💰 Balance: ${users[userId].balance} ${CONFIG.CURRENCY}\n` +
+    `💰 Balance: ${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}\n` +
     `👥 Referrals: ${users[userId].referrals}\n\n` +
-    `🔗 Your referral link:\n${generateReferralLink(userId)}\n\n` +
-    `Use the menu below to navigate:`;
+    `Earn by completing simple tasks:\n\n` +
+    `📱 Visit Sites - Earn by clicking links\n` +
+    `👥 Join Channels - Earn by joining chats\n` +
+    `🤖 Join Bots - Earn by talking to bots\n` +
+    `😄 More - TG Post Views, Twitter Raids\n\n` +
+    `You can also create your own ads with /advertise\n\n` +
+    `Use the /help command or read @ClickBeeFAQ for more info`;
 
-  const keyboard = userId === ADMIN_ID ? getAdminKeyboard() : getMainKeyboard();
-  bot.sendMessage(chatId, welcomeMessage, keyboard);
+  bot.sendMessage(chatId, welcomeMessage, getMainKeyboard());
+});
+
+// Handle all commands
+bot.onText(/\/(help|balance|withdraw|referrals|airdrop|premium|advertise)/, (msg, match) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from?.id!;
+  const command = match?.[1];
+
+  if (!users[userId]) {
+    return bot.sendMessage(chatId, 'Please start the bot first with /start');
+  }
+
+  switch (command) {
+    case 'help':
+      const helpMessage = `Here are all my commands:\n\n` +
+        `/start - Show the main menu\n` +
+        `/advertise - Create or manage your ads\n` +
+        `/balance - Show your balance\n` +
+        `/withdraw - Withdraw balance\n` +
+        `/referrals - Referral details\n` +
+        `/airdrop - ClickBee Token Airdrop\n` +
+        `/premium - ClickBee Premium 💎\n` +
+        `/help - Show help\n\n` +
+        `Visit our FAQ channel for more info.\n\n` +
+        `📊 Statistics\n` +
+        `🔢 Total: 4,317,555 users\n` +
+        `🆕 New(last 24 hours): 714 users\n\n` +
+        `Join our official channel at @ClickBee\n` +
+        `👥 Join the talks at @ClickBeeGroup\n` +
+        `& for technical support contact @ClickBeeSupport📞`;
+      
+      bot.sendMessage(chatId, helpMessage, {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '🪙 ClickBee Token', callback_data: 'clickbee_token' },
+              { text: '💎 Premium', callback_data: 'premium' }
+            ],
+            [
+              { text: '⚙️ Settings', callback_data: 'settings' }
+            ],
+            [
+              { text: '🔙 Back', callback_data: 'back_to_main' }
+            ]
+          ]
+        }
+      });
+      break;
+
+    case 'balance':
+      const balanceMessage = `💰 Account Details:\n\n` +
+        `💎 Balance\n${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}\n\n` +
+        `💎 Available for payout\n${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}\n\n` +
+        `Click « Open Wallet » to access your wallet:`;
+      
+      bot.sendMessage(chatId, balanceMessage, {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '🌸 Open Wallet 🌸', callback_data: 'open_wallet' }
+            ]
+          ]
+        }
+      });
+      break;
+
+    case 'referrals':
+      const refMessage = `👥 Referrals\n\n` +
+        `🔍 You currently have ${users[userId].referrals} referrals.\n\n` +
+        `💰 You will earn 20% of your friend's earnings from tasks and 5% if they create ads.\n\n` +
+        `Send this unique invite link to your friends:\n` +
+        `${generateReferralLink(userId)}\n\n` +
+        `• You can withdraw referral income to an external wallet or spend it on ads.`;
+      
+      bot.sendMessage(chatId, refMessage, {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '📊 View User Stats', callback_data: 'user_stats' }
+            ],
+            [
+              { text: 'Share ➡️', callback_data: 'share_referral' }
+            ]
+          ]
+        }
+      });
+      break;
+
+    case 'advertise':
+      bot.sendMessage(chatId, `📊 Advertise 📊\n\nWhat would you like to promote?\n\nChoose an option below... 👇`, getAdvertiseKeyboard());
+      break;
+  }
 });
 
 // Handle callback queries
 bot.on('callback_query', async (query) => {
   const chatId = query.message?.chat.id!;
   const userId = query.from.id;
+  const data = query.data;
   
-  if (query.data === 'check_membership') {
-    const hasJoined = await checkChannelMembership(userId);
-    if (hasJoined) {
-      bot.answerCallbackQuery(query.id, { text: '✅ Membership verified!' });
-      bot.sendMessage(chatId, '/start', { reply_markup: { remove_keyboard: true } });
-    } else {
-      bot.answerCallbackQuery(query.id, { text: '❌ Please join all channels first!' });
-    }
+  if (!users[userId] && data !== 'check_membership') {
+    return bot.answerCallbackQuery(query.id, { text: 'Please start the bot first with /start' });
   }
-});
 
-// Handle menu commands
-bot.on('message', async (msg) => {
-  const chatId = msg.chat.id;
-  const userId = msg.from?.id!;
-  const text = msg.text;
-
-  if (!users[userId]) return;
-
-  switch (text) {
-    case '💰 Balance':
-      const balanceMsg = `💰 Your Balance\n\n` +
-        `💵 Current: ${users[userId].balance} ${CONFIG.CURRENCY}\n` +
-        `📈 Total Earned: ${users[userId].totalEarned} ${CONFIG.CURRENCY}\n` +
-        `✅ Tasks Completed: ${users[userId].tasksCompleted}`;
-      bot.sendMessage(chatId, balanceMsg);
+  switch (data) {
+    case 'check_membership':
+      const hasJoined = await checkChannelMembership(userId);
+      if (hasJoined) {
+        bot.answerCallbackQuery(query.id, { text: '✅ Membership verified!' });
+        bot.sendMessage(chatId, '/start');
+      } else {
+        bot.answerCallbackQuery(query.id, { text: '❌ Please join all channels first!' });
+      }
       break;
 
-    case '👥 Referrals':
-      const refMsg = `👥 Referral Stats\n\n` +
+    case 'balance':
+      const balanceMessage = `💰 Your Balance\n\n` +
+        `💵 Current: ${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}\n` +
+        `📈 Total Earned: ${users[userId].totalEarned.toFixed(4)} ${CONFIG.CURRENCY}\n` +
+        `✅ Tasks Completed: ${users[userId].tasksCompleted}`;
+      bot.editMessageText(balanceMessage, {
+        chat_id: chatId,
+        message_id: query.message?.message_id,
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🔙 Back', callback_data: 'back_to_main' }]
+          ]
+        }
+      });
+      break;
+
+    case 'referrals':
+      const refMessage = `👥 Referral Stats\n\n` +
         `👤 Total Referrals: ${users[userId].referrals}\n` +
         `💰 Bonus per referral: ${CONFIG.REF_BONUS} ${CONFIG.CURRENCY}\n` +
-        `💵 Total from referrals: ${users[userId].referrals * CONFIG.REF_BONUS} ${CONFIG.CURRENCY}\n\n` +
+        `💵 Total from referrals: ${(users[userId].referrals * CONFIG.REF_BONUS).toFixed(4)} ${CONFIG.CURRENCY}\n\n` +
         `🔗 Your referral link:\n${generateReferralLink(userId)}`;
-      bot.sendMessage(chatId, refMsg);
+      bot.editMessageText(refMessage, {
+        chat_id: chatId,
+        message_id: query.message?.message_id,
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🔙 Back', callback_data: 'back_to_main' }]
+          ]
+        }
+      });
       break;
 
-    case '📢 Tasks':
-      let taskMsg = '📢 Available Tasks\n\n';
-      const availableTasks = Object.values(tasks).filter((task: any) => task.status === 'approved');
+    case 'visit_sites':
+      // Sample task
+      const siteTaskMessage = `Hassle-Free Bitcoin Mining on the Cloud without technical expertise or big investments! 📈\n\n` +
+        `_________________________\n\n` +
+        `👆 Mission: Engage with this website.\n\n` +
+        `❓ Press « 🌐 Open Link » and browse the website.`;
       
-      if (availableTasks.length === 0) {
-        taskMsg += 'No tasks available at the moment.';
-      } else {
-        availableTasks.forEach((task: any, index) => {
-          taskMsg += `${index + 1}. ${task.title}\n`;
-          taskMsg += `💰 Reward: ${task.reward} ${CONFIG.CURRENCY}\n`;
-          taskMsg += `📝 Description: ${task.description}\n\n`;
-        });
-      }
-      bot.sendMessage(chatId, taskMsg);
+      bot.editMessageText(siteTaskMessage, {
+        chat_id: chatId,
+        message_id: query.message?.message_id,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '⏭️ Skip', callback_data: 'skip_task' },
+              { text: '🌐 Open Link 🌐', callback_data: 'open_link' }
+            ],
+            [
+              { text: '🔙 Back', callback_data: 'back_to_main' }
+            ]
+          ]
+        }
+      });
       break;
 
-    case '💳 Deposit':
-      const depositMsg = `💳 Deposit ${CONFIG.CURRENCY}\n\n` +
+    case 'join_channels':
+      bot.editMessageText(`❌ Oh no! There are NO TASKS available at the moment. Please check back later! 🔄\n\nYou can promote your own channels, groups, or bots with /OrderAds.`, {
+        chat_id: chatId,
+        message_id: query.message?.message_id,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '➕ Create New Ad ➕', callback_data: 'create_ad' }
+            ],
+            [
+              { text: '🔙 Back', callback_data: 'back_to_main' }
+            ]
+          ]
+        }
+      });
+      break;
+
+    case 'join_bots':
+      bot.editMessageText(`❌ Oh no! There are NO TASKS available at the moment. Please check back later! 🔄\n\nYou can promote your own channels, groups, or bots with /OrderAds.`, {
+        chat_id: chatId,
+        message_id: query.message?.message_id,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '➕ Create New Ad ➕', callback_data: 'create_ad' }
+            ],
+            [
+              { text: '🔙 Back', callback_data: 'back_to_main' }
+            ]
+          ]
+        }
+      });
+      break;
+
+    case 'more_tasks':
+      bot.editMessageText(`😄 More Tasks\n\nChoose a task category:`, {
+        chat_id: chatId,
+        message_id: query.message?.message_id,
+        ...getMoreTasksKeyboard()
+      });
+      break;
+
+    case 'advertise':
+      bot.editMessageText(`📊 Advertise 📊\n\nWhat would you like to promote?\n\nChoose an option below... 👇`, {
+        chat_id: chatId,
+        message_id: query.message?.message_id,
+        ...getAdvertiseKeyboard()
+      });
+      break;
+
+    case 'ad_channel_members':
+      userStates[userId] = 'awaiting_channel_link';
+      bot.editMessageText(`🔗 Send the PUBLIC LINK of your channel/group\n\n` +
+        `ℹ️ Please make sure the link starts with https://t.me/.\n` +
+        `ℹ️ Alternatively, you can share the @username (including @.....)\n\n` +
+        `Members will join your channels or groups immediately after you activate this ad!\n\n` +
+        `👇 Send the link to your channel or group now.`, {
+        chat_id: chatId,
+        message_id: query.message?.message_id,
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🔙 Back', callback_data: 'advertise' }]
+          ]
+        }
+      });
+      break;
+
+    case 'ad_group_members':
+      userStates[userId] = 'awaiting_group_link';
+      bot.editMessageText(`🔗 Send the PUBLIC LINK of your channel/group\n\n` +
+        `ℹ️ Please make sure the link starts with https://t.me/.\n` +
+        `ℹ️ Alternatively, you can share the @username (including @.....)\n\n` +
+        `Members will join your channels or groups immediately after you activate this ad!\n\n` +
+        `👇 Send the link to your channel or group now.`, {
+        chat_id: chatId,
+        message_id: query.message?.message_id,
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🔙 Back', callback_data: 'advertise' }]
+          ]
+        }
+      });
+      break;
+
+    case 'ad_bot':
+      bot.editMessageText(`🔗 FORWARD a message from the bot you want to promote\n\n` +
+        `ℹ️ Go to the bot you want to promote\n` +
+        `2️⃣ select any messages\n` +
+        `3️⃣ Forward it to this bot\n\n` +
+        `👇 Do it now`, {
+        chat_id: chatId,
+        message_id: query.message?.message_id,
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🔙 Back', callback_data: 'advertise' }]
+          ]
+        }
+      });
+      break;
+
+    case 'deposit':
+      const depositMessage = `💳 Deposit ${CONFIG.CURRENCY}\n\n` +
         `💰 Minimum: ${CONFIG.MIN_DEPOSIT} ${CONFIG.CURRENCY}\n\n` +
         `📋 Payment Methods:\n` +
         `🟡 Binance Pay ID: ${CONFIG.BINANCE_PAY_ID}\n` +
         `🔵 Payeer ID: ${CONFIG.PAYEER_ID}\n\n` +
         `After payment, send screenshot with amount for verification.`;
-      bot.sendMessage(chatId, depositMsg);
+      bot.editMessageText(depositMessage, {
+        chat_id: chatId,
+        message_id: query.message?.message_id,
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🔙 Back', callback_data: 'back_to_main' }]
+          ]
+        }
+      });
       break;
 
-    case '🏧 Withdraw':
+    case 'withdraw':
       if (users[userId].balance < CONFIG.MIN_WITHDRAW) {
-        bot.sendMessage(chatId, `❌ Minimum withdrawal: ${CONFIG.MIN_WITHDRAW} ${CONFIG.CURRENCY}`);
+        bot.answerCallbackQuery(query.id, { 
+          text: `❌ Minimum withdrawal: ${CONFIG.MIN_WITHDRAW} ${CONFIG.CURRENCY}`,
+          show_alert: true 
+        });
       } else {
         const withdrawMsg = `🏧 Withdraw ${CONFIG.CURRENCY}\n\n` +
-          `💰 Available: ${users[userId].balance} ${CONFIG.CURRENCY}\n` +
+          `💰 Available: ${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}\n` +
           `💰 Minimum: ${CONFIG.MIN_WITHDRAW} ${CONFIG.CURRENCY}\n\n` +
           `Send: /withdraw <amount> <payment_method> <payment_id>`;
-        bot.sendMessage(chatId, withdrawMsg);
+        bot.editMessageText(withdrawMsg, {
+          chat_id: chatId,
+          message_id: query.message?.message_id,
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🔙 Back', callback_data: 'back_to_main' }]
+            ]
+          }
+        });
       }
       break;
 
-    case '📊 Profile':
-      const profileMsg = `📊 Your Profile\n\n` +
+    case 'info':
+      const infoMessage = `📊 Your Profile\n\n` +
         `👤 Name: ${users[userId].firstName}\n` +
         `🆔 ID: ${userId}\n` +
-        `💰 Balance: ${users[userId].balance} ${CONFIG.CURRENCY}\n` +
+        `💰 Balance: ${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}\n` +
         `👥 Referrals: ${users[userId].referrals}\n` +
-        `📈 Total Earned: ${users[userId].totalEarned} ${CONFIG.CURRENCY}\n` +
+        `📈 Total Earned: ${users[userId].totalEarned.toFixed(4)} ${CONFIG.CURRENCY}\n` +
         `✅ Tasks Completed: ${users[userId].tasksCompleted}\n` +
         `📅 Joined: ${new Date(users[userId].joinedAt).toLocaleDateString()}`;
-      bot.sendMessage(chatId, profileMsg);
+      bot.editMessageText(infoMessage, {
+        chat_id: chatId,
+        message_id: query.message?.message_id,
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🔙 Back', callback_data: 'back_to_main' }]
+          ]
+        }
+      });
       break;
 
-    // Admin commands
-    case '📊 Total Users':
-      if (userId === ADMIN_ID) {
-        const totalUsers = Object.keys(users).length;
-        const totalBalance = Object.values(users).reduce((sum: number, user: any) => sum + user.balance, 0);
-        const adminMsg = `📊 Bot Statistics\n\n` +
-          `👥 Total Users: ${totalUsers}\n` +
-          `💰 Total Balance: ${totalBalance} ${CONFIG.CURRENCY}\n` +
-          `📢 Active Tasks: ${Object.values(tasks).filter((t: any) => t.status === 'approved').length}`;
-        bot.sendMessage(chatId, adminMsg);
-      }
+    case 'back_to_main':
+      const welcomeMessage = `🎉 Welcome ${users[userId].firstName}!\n\n` +
+        `💰 Balance: ${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}\n` +
+        `👥 Referrals: ${users[userId].referrals}\n\n` +
+        `Earn by completing simple tasks:\n\n` +
+        `📱 Visit Sites - Earn by clicking links\n` +
+        `👥 Join Channels - Earn by joining chats\n` +
+        `🤖 Join Bots - Earn by talking to bots\n` +
+        `😄 More - TG Post Views, Twitter Raids\n\n` +
+        `You can also create your own ads with /advertise\n\n` +
+        `Use the /help command or read @ClickBeeFAQ for more info`;
+
+      bot.editMessageText(welcomeMessage, {
+        chat_id: chatId,
+        message_id: query.message?.message_id,
+        ...getMainKeyboard()
+      });
       break;
 
-    case '👤 User Menu':
-      if (userId === ADMIN_ID) {
-        bot.sendMessage(chatId, 'Switched to user menu', getMainKeyboard());
-      }
+    case 'open_link':
+      // Simulate task completion and reward
+      const reward = 0.001;
+      users[userId].balance += reward;
+      users[userId].totalEarned += reward;
+      users[userId].tasksCompleted += 1;
+      saveData();
+      
+      bot.answerCallbackQuery(query.id, { 
+        text: `✅ Task completed! You earned ${reward} ${CONFIG.CURRENCY}`,
+        show_alert: true 
+      });
       break;
 
-    case '💬 Broadcast':
-      if (userId === ADMIN_ID) {
-        bot.sendMessage(chatId, 'Send your broadcast message:');
-        // Set state for next message to be broadcast
-      }
+    case 'skip_task':
+      bot.answerCallbackQuery(query.id, { text: 'Task skipped' });
       break;
+  }
+});
+
+// Handle text messages for states
+bot.on('message', (msg) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from?.id!;
+  const text = msg.text;
+
+  if (!text || text.startsWith('/')) return;
+  if (!users[userId]) return;
+
+  const userState = userStates[userId];
+  
+  if (userState === 'awaiting_channel_link' || userState === 'awaiting_group_link') {
+    if (text.includes('t.me/') || text.startsWith('@')) {
+      const adId = Date.now().toString();
+      advertisements[adId] = {
+        id: adId,
+        userId,
+        type: userState === 'awaiting_channel_link' ? 'channel' : 'group',
+        link: text,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      };
+      
+      delete userStates[userId];
+      saveData();
+      
+      bot.sendMessage(chatId, `✅ Advertisement submitted for review!\n\nLink: ${text}\nType: ${userState === 'awaiting_channel_link' ? 'Channel Members' : 'Group Members'}\n\nAdmin will review and approve your ad soon.`);
+      
+      // Notify admin
+      bot.sendMessage(ADMIN_ID, 
+        `📢 New Advertisement Request\n\n` +
+        `👤 User: ${users[userId].firstName} (${userId})\n` +
+        `🔗 Link: ${text}\n` +
+        `📝 Type: ${userState === 'awaiting_channel_link' ? 'Channel Members' : 'Group Members'}\n` +
+        `🆔 Ad ID: ${adId}`
+      );
+    } else {
+      bot.sendMessage(chatId, '❌ Please send a valid Telegram link (starting with https://t.me/) or username (starting with @)');
+    }
   }
 });
 
