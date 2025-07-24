@@ -66,19 +66,42 @@ const saveData = () => {
 // Initialize bot
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-// Check channel membership
-const checkChannelMembership = async (userId: number): Promise<boolean> => {
+// Enhanced channel membership check with retry mechanism
+const checkChannelMembership = async (userId: number, retryCount = 0): Promise<boolean> => {
   try {
     for (const channel of REQUIRED_CHANNELS) {
       const channelUsername = channel.replace('https://t.me/', '@');
-      const member = await bot.getChatMember(channelUsername, userId);
-      if (member.status === 'left' || member.status === 'kicked') {
+      try {
+        const member = await bot.getChatMember(channelUsername, userId);
+        if (member.status === 'left' || member.status === 'kicked') {
+          console.log(`User ${userId} not in channel ${channelUsername}`);
+          return false;
+        }
+      } catch (error: any) {
+        console.log(`Error checking ${channelUsername} for user ${userId}:`, error.message);
+        // If it's a network error and we haven't retried too much, try again
+        if (retryCount < 2 && (error.message.includes('ETELEGRAM') || error.message.includes('network'))) {
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+          return checkChannelMembership(userId, retryCount + 1);
+        }
         return false;
       }
     }
     return true;
   } catch (error) {
-    console.log(`Error checking membership for user ${userId}:`, error);
+    console.log(`General error checking membership for user ${userId}:`, error);
+    return false;
+  }
+};
+
+// Check if user is member of a specific channel (for task validation)
+const checkSpecificChannelMembership = async (userId: number, channelLink: string): Promise<boolean> => {
+  try {
+    const channelUsername = channelLink.replace('https://t.me/', '@');
+    const member = await bot.getChatMember(channelUsername, userId);
+    return member.status !== 'left' && member.status !== 'kicked';
+  } catch (error) {
+    console.log(`Error checking specific channel ${channelLink} for user ${userId}:`, error);
     return false;
   }
 };
@@ -184,6 +207,14 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
   const username = msg.from?.username || '';
   const firstName = msg.from?.first_name || 'User';
   
+  // Store referral code for later use
+  const referralCode = match?.[1]?.trim();
+  let referrerId = null;
+  
+  if (referralCode && referralCode !== userId.toString()) {
+    referrerId = parseInt(referralCode);
+  }
+
   // Check if user joined required channels
   const hasJoined = await checkChannelMembership(userId);
   
@@ -194,26 +225,18 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
       `2️⃣ ${REQUIRED_CHANNELS[1]}\n` +
       `3️⃣ ${REQUIRED_CHANNELS[2]}\n` +
       `4️⃣ ${REQUIRED_CHANNELS[3]}\n\n` +
-      `After joining all channels, press /start`;
+      `After joining all channels, press the button below:`;
     
     return bot.sendMessage(chatId, joinMessage, {
       reply_markup: {
         inline_keyboard: [
-          [{ text: '✅ Check Membership', callback_data: 'check_membership' }]
+          [{ text: '✅ Check Membership', callback_data: `check_membership_${referrerId || 'none'}` }]
         ]
       }
     });
   }
 
-  // Handle referral
-  const referralCode = match?.[1]?.trim();
-  let referrerId = null;
-  
-  if (referralCode && referralCode !== userId.toString()) {
-    referrerId = parseInt(referralCode);
-  }
-
-  // Register or update user
+  // Register or update user (now we know they've joined channels)
   if (!users[userId]) {
     users[userId] = {
       id: userId,
@@ -239,7 +262,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
       users[referrerId].balance += CONFIG.REF_BONUS;
       users[referrerId].referrals += 1;
       users[referrerId].totalEarned += CONFIG.REF_BONUS;
-      users[referrerId].totalReferralEarned += CONFIG.REF_BONUS;
+      users[referrerId].totalReferralEarned = (users[referrerId].totalReferralEarned || 0) + CONFIG.REF_BONUS;
       
       // Notify referrer
       bot.sendMessage(referrerId, 
@@ -356,18 +379,81 @@ bot.on('callback_query', async (query) => {
   const userId = query.from.id;
   const data = query.data;
   
-  if (!users[userId] && data !== 'check_membership') {
+  if (!users[userId] && !data?.startsWith('check_membership')) {
     return bot.answerCallbackQuery(query.id, { text: 'Please start the bot first with /start' });
   }
 
   try {
     switch (data) {
       case 'check_membership':
+      case (data?.match(/^check_membership_/) || {}).input:
+        const referrerIdFromCallback = data.includes('_') ? data.split('_')[2] : null;
+        const referrerId = referrerIdFromCallback !== 'none' ? parseInt(referrerIdFromCallback) : null;
+        
         const hasJoined = await checkChannelMembership(userId);
         if (hasJoined) {
           bot.answerCallbackQuery(query.id, { text: '✅ Membership confirmed!' });
+          
+          // Register user now with referral
+          if (!users[userId]) {
+            const username = query.from.username || '';
+            const firstName = query.from.first_name || 'User';
+            
+            users[userId] = {
+              id: userId,
+              username,
+              firstName,
+              balance: 0,
+              referrals: 0,
+              referrerId,
+              joinedAt: new Date().toISOString(),
+              totalEarned: 0,
+              tasksCompleted: 0,
+              completedTasks: [],
+              totalDeposited: 0,
+              totalWithdrawn: 0,
+              adsCreated: 0,
+              isActive: true,
+              lastDailyBonus: null,
+              totalReferralEarned: 0
+            };
+
+            // Give referral bonus
+            if (referrerId && users[referrerId]) {
+              users[referrerId].balance += CONFIG.REF_BONUS;
+              users[referrerId].referrals += 1;
+              users[referrerId].totalEarned += CONFIG.REF_BONUS;
+              users[referrerId].totalReferralEarned = (users[referrerId].totalReferralEarned || 0) + CONFIG.REF_BONUS;
+              
+              // Notify referrer
+              bot.sendMessage(referrerId, 
+                `🎉 New Referral Joined!\n\n` +
+                `👤 ${firstName} joined using your link\n` +
+                `💰 You earned ${CONFIG.REF_BONUS} ${CONFIG.CURRENCY} bonus!\n\n` +
+                `🔗 Keep referring to earn more!`);
+            }
+
+            saveData();
+          }
+          
           setTimeout(() => {
-            bot.sendMessage(chatId, '/start');
+            const welcomeMessage = `🎉 Welcome ${query.from.first_name}!\n` +
+              `💎 Welcome to ${CONFIG.BOT_NAME} CPC Platform\n\n` +
+              `💰 Your Balance: ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+              `👥 Referrals: ${users[userId].referrals} people\n` +
+              `🎯 Completed Tasks: ${users[userId].tasksCompleted} tasks\n\n` +
+              `🚀 Easy ways to earn money:\n\n` +
+              `🌐 Visit Sites - Earn by visiting websites\n` +
+              `👥 Join Channels - Earn by joining channels\n` +
+              `🤖 Join Bots - Earn by joining bots\n` +
+              `😄 More Tasks - More tasks and bonuses\n\n` +
+              `📊 Create your own advertisements to grow your business!`;
+
+            bot.editMessageText(welcomeMessage, {
+              chat_id: chatId,
+              message_id: query.message?.message_id,
+              ...getMainKeyboard()
+            });
           }, 1000);
         } else {
           bot.answerCallbackQuery(query.id, { text: '❌ Please join all channels first!' });
@@ -487,6 +573,20 @@ bot.on('callback_query', async (query) => {
               [{ text: '🔙 Back', callback_data: 'deposit' }]
             ]
           }
+        });
+        break;
+
+      case 'copy_binance_id':
+        bot.answerCallbackQuery(query.id, { 
+          text: `Binance Pay ID: ${CONFIG.BINANCE_PAY_ID}`,
+          show_alert: true 
+        });
+        break;
+
+      case 'copy_payeer_id':
+        bot.answerCallbackQuery(query.id, { 
+          text: `Payeer ID: ${CONFIG.PAYEER_ID}`,
+          show_alert: true 
         });
         break;
 
@@ -612,7 +712,8 @@ bot.on('callback_query', async (query) => {
             `📝 Enter advertisement title:\n\n` +
             `💡 Example: "Join our amazing crypto channel!"\n` +
             `📏 Maximum 50 characters\n\n` +
-            `⚠️ Make sure your title is attractive and clear`, {
+            `⚠️ IMPORTANT: After creating this ad, you MUST add ${CONFIG.BOT_USERNAME} as admin to your channel so we can verify if users actually joined!\n\n` +
+            `🔧 Add ${CONFIG.BOT_USERNAME} as admin in your channel`, {
             chat_id: chatId,
             message_id: query.message?.message_id,
             reply_markup: {
@@ -827,6 +928,7 @@ bot.on('callback_query', async (query) => {
             `2️⃣ Join the channel\n` +
             `3️⃣ Stay in channel for 30+ seconds\n` +
             `4️⃣ Click "✅ Task Complete"\n\n` +
+            `⚠️ You must actually join to get reward!\n` +
             `🎯 Available Tasks: ${availableChannelTasks.length}`;
           
           bot.editMessageText(channelTaskMessage, {
@@ -1311,7 +1413,7 @@ bot.on('callback_query', async (query) => {
       }
     }
 
-    // Handle task completion
+    // Handle task completion with enhanced verification
     if (data.startsWith('complete_task_')) {
       const taskId = data.split('_')[2];
       const task = advertisements[taskId];
@@ -1342,6 +1444,18 @@ bot.on('callback_query', async (query) => {
           return;
         }
         
+        // Enhanced verification for channel join tasks
+        if (task.type === 'join_channels') {
+          const hasJoinedChannel = await checkSpecificChannelMembership(userId, task.link);
+          if (!hasJoinedChannel) {
+            bot.answerCallbackQuery(query.id, { 
+              text: '❌ You must actually join the channel to complete this task!',
+              show_alert: true 
+            });
+            return;
+          }
+        }
+        
         // Add reward
         users[userId].balance += task.cpc;
         users[userId].totalEarned += task.cpc;
@@ -1363,7 +1477,7 @@ bot.on('callback_query', async (query) => {
           const referralBonus = task.cpc * 0.20; // 20% referral bonus
           users[users[userId].referrerId].balance += referralBonus;
           users[users[userId].referrerId].totalEarned += referralBonus;
-          users[users[userId].referrerId].totalReferralEarned += referralBonus;
+          users[users[userId].referrerId].totalReferralEarned = (users[users[userId].referrerId].totalReferralEarned || 0) + referralBonus;
           
           bot.sendMessage(users[userId].referrerId, 
             `🎉 Referral Bonus!\n\n${users[userId].firstName} completed a task.\n💰 You earned ${referralBonus.toFixed(6)} ${CONFIG.CURRENCY} bonus!`);
@@ -1470,6 +1584,9 @@ bot.on('callback_query', async (query) => {
         
         saveData();
         
+        const reminderMessage = tempAd.type === 'channel' ? 
+          `\n\n⚠️ IMPORTANT REMINDER:\nYou must add ${CONFIG.BOT_USERNAME} as admin to your channel for task verification to work properly!` : '';
+        
         bot.editMessageText(`✅ Advertisement Created Successfully!\n\n` +
           `📊 Ad ID: ${adId}\n` +
           `📝 Title: ${tempAd.title}\n` +
@@ -1479,7 +1596,7 @@ bot.on('callback_query', async (query) => {
           `🎯 Type: ${tempAd.type}\n` +
           `🟢 Status: Active\n\n` +
           `💰 Remaining Balance: ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n\n` +
-          `🚀 Your ad is now live and will be shown to users!`, {
+          `🚀 Your ad is now live and will be shown to users!${reminderMessage}`, {
           chat_id: chatId,
           message_id: query.message?.message_id,
           reply_markup: {
@@ -1959,11 +2076,14 @@ bot.on('message', (msg) => {
         const linkExample = adType === 'channel' ? 'https://t.me/yourchannel' : 
                            adType === 'site' ? 'https://yourwebsite.com' : 'https://t.me/yourbot';
         
+        const channelReminder = adType === 'channel' ? 
+          `\n\n⚠️ IMPORTANT: After creating this ad, you must add ${CONFIG.BOT_USERNAME} as admin to your channel!` : '';
+        
         bot.sendMessage(chatId, 
           `🔗 ${linkType.charAt(0).toUpperCase() + linkType.slice(1)} Link\n\n` +
           `Enter your ${linkType} link:\n\n` +
           `💡 Example: ${linkExample}\n\n` +
-          `⚠️ Make sure the link is working and accessible`,
+          `⚠️ Make sure the link is working and accessible${channelReminder}`,
           {
             reply_markup: {
               inline_keyboard: [
@@ -2090,6 +2210,9 @@ bot.on('message', (msg) => {
         
         saveData();
         
+        const reminderMessage = tempAd.type === 'channel' ? 
+          `\n\n⚠️ IMPORTANT REMINDER:\nYou must add ${CONFIG.BOT_USERNAME} as admin to your channel for task verification to work properly!` : '';
+        
         bot.sendMessage(chatId, 
           `✅ Advertisement Created Successfully!\n\n` +
           `📊 Ad ID: ${adId}\n` +
@@ -2100,7 +2223,7 @@ bot.on('message', (msg) => {
           `🎯 Type: ${tempAd.type}\n` +
           `🟢 Status: Active\n\n` +
           `💰 Remaining Balance: ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n\n` +
-          `🚀 Your ad is now live and will be shown to users!`,
+          `🚀 Your ad is now live and will be shown to users!${reminderMessage}`,
           {
             reply_markup: {
               inline_keyboard: [
