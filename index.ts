@@ -22,9 +22,9 @@ const CONFIG = {
   PLATFORM_FEE: 0.20,
   MIN_CPC: 0.005,
   MAX_CPC: 0.100,
-  MIN_DEPOSIT: 0.2,
+  MIN_DEPOSIT: 0.20,
   MAX_DEPOSIT: 1000,
-  MIN_WITHDRAW: 0.1,
+  MIN_WITHDRAW: 0.10,
   MAX_WITHDRAW: 500,
   CURRENCY: 'USDT',
   BINANCE_PAY_ID: '787819330',
@@ -599,13 +599,134 @@ bot.on('callback_query', async (query) => {
         });
         break;
 
+      // Advertisement creation handlers
+      case 'ad_channel_members':
+        if (users[userId].balance < CONFIG.MIN_CPC) {
+          bot.answerCallbackQuery(query.id, { 
+            text: `❌ Minimum balance required: ${CONFIG.MIN_CPC} ${CONFIG.CURRENCY}`,
+            show_alert: true 
+          });
+        } else {
+          userStates[userId] = 'creating_ad_channel_members_title';
+          bot.editMessageText(`👥 Create Channel Members Advertisement\n\n` +
+            `📝 Enter advertisement title:\n\n` +
+            `💡 Example: "Join our amazing crypto channel!"\n` +
+            `📏 Maximum 50 characters\n\n` +
+            `⚠️ Make sure your title is attractive and clear`, {
+            chat_id: chatId,
+            message_id: query.message?.message_id,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🔙 Back', callback_data: 'advertise' }]
+              ]
+            }
+          });
+        }
+        break;
+
+      case 'ad_site_visits':
+        if (users[userId].balance < CONFIG.MIN_CPC) {
+          bot.answerCallbackQuery(query.id, { 
+            text: `❌ Minimum balance required: ${CONFIG.MIN_CPC} ${CONFIG.CURRENCY}`,
+            show_alert: true 
+          });
+        } else {
+          userStates[userId] = 'creating_ad_site_visits_title';
+          bot.editMessageText(`🌐 Create Website Visit Advertisement\n\n` +
+            `📝 Enter advertisement title:\n\n` +
+            `💡 Example: "Visit our amazing website!"\n` +
+            `📏 Maximum 50 characters\n\n` +
+            `⚠️ Make sure your title is attractive and clear`, {
+            chat_id: chatId,
+            message_id: query.message?.message_id,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🔙 Back', callback_data: 'advertise' }]
+              ]
+            }
+          });
+        }
+        break;
+
+      case 'ad_bot_members':
+        if (users[userId].balance < CONFIG.MIN_CPC) {
+          bot.answerCallbackQuery(query.id, { 
+            text: `❌ Minimum balance required: ${CONFIG.MIN_CPC} ${CONFIG.CURRENCY}`,
+            show_alert: true 
+          });
+        } else {
+          userStates[userId] = 'creating_ad_bot_members_title';
+          bot.editMessageText(`🤖 Create Bot Members Advertisement\n\n` +
+            `📝 Enter advertisement title:\n\n` +
+            `💡 Example: "Join our amazing bot!"\n` +
+            `📏 Maximum 50 characters\n\n` +
+            `⚠️ Make sure your title is attractive and clear`, {
+            chat_id: chatId,
+            message_id: query.message?.message_id,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🔙 Back', callback_data: 'advertise' }]
+              ]
+            }
+          });
+        }
+        break;
+
+      case 'my_ads':
+        const userAds = Object.values(advertisements).filter((ad: any) => ad.userId === userId);
+        
+        if (userAds.length === 0) {
+          bot.editMessageText(`📈 My Advertisements\n\n` +
+            `❌ You haven't created any advertisements yet!\n\n` +
+            `🚀 Create your first advertisement to start promoting your business`, {
+            chat_id: chatId,
+            message_id: query.message?.message_id,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '➕ Create Advertisement', callback_data: 'advertise' }],
+                [{ text: '🔙 Back', callback_data: 'advertise' }]
+              ]
+            }
+          });
+        } else {
+          let adsText = `📈 My Advertisements (${userAds.length})\n\n`;
+          
+          userAds.forEach((ad: any, index: number) => {
+            const statusEmoji = ad.status === 'active' ? '🟢' : ad.status === 'paused' ? '🟡' : '🔴';
+            const remainingBudget = (ad.totalBudget - ad.totalSpent).toFixed(6);
+            const completionRate = ad.totalBudget > 0 ? ((ad.totalSpent / ad.totalBudget) * 100).toFixed(1) : '0';
+            
+            adsText += `${statusEmoji} Ad #${ad.id}\n` +
+              `📝 ${ad.title}\n` +
+              `💰 CPC: ${ad.cpc.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+              `📊 Clicks: ${ad.totalClicks}\n` +
+              `💵 Spent: ${ad.totalSpent.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+              `💎 Remaining: ${remainingBudget} ${CONFIG.CURRENCY}\n` +
+              `📈 Progress: ${completionRate}%\n\n`;
+          });
+          
+          bot.editMessageText(adsText, {
+            chat_id: chatId,
+            message_id: query.message?.message_id,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🔄 Refresh', callback_data: 'my_ads' }],
+                [{ text: '➕ Create New Ad', callback_data: 'advertise' }],
+                [{ text: '🔙 Back', callback_data: 'advertise' }]
+              ]
+            }
+          });
+        }
+        break;
+
       case 'visit_sites':
         // Generate site visiting tasks
         const availableSiteTasks = Object.values(advertisements).filter((ad: any) => 
           ad.status === 'active' && 
           ad.type === 'site_visits' && 
-          ad.spentToday < ad.dailyBudget &&
-          !users[userId].completedTasks.includes(ad.id)
+          ad.totalSpent < ad.totalBudget &&
+          !users[userId].completedTasks.includes(ad.id) &&
+          ad.userId !== userId // Don't show own ads
         );
 
         if (availableSiteTasks.length === 0) {
@@ -627,10 +748,16 @@ bot.on('callback_query', async (query) => {
           });
         } else {
           const task = availableSiteTasks[Math.floor(Math.random() * availableSiteTasks.length)] as any;
+          const remainingBudget = (task.totalBudget - task.totalSpent).toFixed(6);
+          const remainingClicks = Math.floor((task.totalBudget - task.totalSpent) / task.cpc);
+          
           const siteTaskMessage = `🌐 Website Visit Task #${task.id}\n\n` +
-            `📝 Description: ${task.description}\n` +
+            `📝 Title: ${task.title}\n` +
+            `📄 Description: ${task.description}\n` +
             `🔗 Website: ${task.link}\n\n` +
             `💰 Reward: ${task.cpc.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+            `📊 Remaining Budget: ${remainingBudget} ${CONFIG.CURRENCY}\n` +
+            `🎯 Remaining Clicks: ${remainingClicks}\n` +
             `⏱️ Required Time: 30 seconds\n\n` +
             `📋 Instructions:\n` +
             `1️⃣ Click "🌐 Visit Website" button\n` +
@@ -649,6 +776,190 @@ bot.on('callback_query', async (query) => {
                   { text: '🌐 Visit Website', url: task.link }
                 ],
                 [{ text: '✅ Task Complete', callback_data: `complete_task_${task.id}` }],
+                [{ text: '🔙 Back', callback_data: 'back_to_main' }]
+              ]
+            }
+          });
+        }
+        break;
+
+      case 'join_channels':
+        // Generate channel joining tasks
+        const availableChannelTasks = Object.values(advertisements).filter((ad: any) => 
+          ad.status === 'active' && 
+          ad.type === 'join_channels' && 
+          ad.totalSpent < ad.totalBudget &&
+          !users[userId].completedTasks.includes(ad.id) &&
+          ad.userId !== userId // Don't show own ads
+        );
+
+        if (availableChannelTasks.length === 0) {
+          bot.editMessageText(`👥 Channel Join Tasks\n\n` +
+            `❌ No channel join tasks available currently!\n\n` +
+            `🔄 Please check back later\n` +
+            `📊 Or create advertisements for your channel`, {
+            chat_id: chatId,
+            message_id: query.message?.message_id,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '➕ Create Advertisement', callback_data: 'ad_channel_members' }],
+                [
+                  { text: '🔄 Refresh', callback_data: 'join_channels' },
+                  { text: '🔙 Back', callback_data: 'back_to_main' }
+                ]
+              ]
+            }
+          });
+        } else {
+          const task = availableChannelTasks[Math.floor(Math.random() * availableChannelTasks.length)] as any;
+          const remainingBudget = (task.totalBudget - task.totalSpent).toFixed(6);
+          const remainingClicks = Math.floor((task.totalBudget - task.totalSpent) / task.cpc);
+          
+          const channelTaskMessage = `👥 Channel Join Task #${task.id}\n\n` +
+            `📝 Title: ${task.title}\n` +
+            `📄 Description: ${task.description}\n` +
+            `🔗 Channel: ${task.link}\n\n` +
+            `💰 Reward: ${task.cpc.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+            `📊 Remaining Budget: ${remainingBudget} ${CONFIG.CURRENCY}\n` +
+            `🎯 Remaining Clicks: ${remainingClicks}\n\n` +
+            `📋 Instructions:\n` +
+            `1️⃣ Click "👥 Join Channel" button\n` +
+            `2️⃣ Join the channel\n` +
+            `3️⃣ Stay in channel for 30+ seconds\n` +
+            `4️⃣ Click "✅ Task Complete"\n\n` +
+            `🎯 Available Tasks: ${availableChannelTasks.length}`;
+          
+          bot.editMessageText(channelTaskMessage, {
+            chat_id: chatId,
+            message_id: query.message?.message_id,
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '⏭️ Skip Task', callback_data: 'join_channels' },
+                  { text: '👥 Join Channel', url: task.link }
+                ],
+                [{ text: '✅ Task Complete', callback_data: `complete_task_${task.id}` }],
+                [{ text: '🔙 Back', callback_data: 'back_to_main' }]
+              ]
+            }
+          });
+        }
+        break;
+
+      case 'join_bots':
+        // Generate bot joining tasks
+        const availableBotTasks = Object.values(advertisements).filter((ad: any) => 
+          ad.status === 'active' && 
+          ad.type === 'join_bots' && 
+          ad.totalSpent < ad.totalBudget &&
+          !users[userId].completedTasks.includes(ad.id) &&
+          ad.userId !== userId // Don't show own ads
+        );
+
+        if (availableBotTasks.length === 0) {
+          bot.editMessageText(`🤖 Bot Join Tasks\n\n` +
+            `❌ No bot join tasks available currently!\n\n` +
+            `🔄 Please check back later\n` +
+            `📊 Or create advertisements for your bot`, {
+            chat_id: chatId,
+            message_id: query.message?.message_id,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '➕ Create Advertisement', callback_data: 'ad_bot_members' }],
+                [
+                  { text: '🔄 Refresh', callback_data: 'join_bots' },
+                  { text: '🔙 Back', callback_data: 'back_to_main' }
+                ]
+              ]
+            }
+          });
+        } else {
+          const task = availableBotTasks[Math.floor(Math.random() * availableBotTasks.length)] as any;
+          const remainingBudget = (task.totalBudget - task.totalSpent).toFixed(6);
+          const remainingClicks = Math.floor((task.totalBudget - task.totalSpent) / task.cpc);
+          
+          const botTaskMessage = `🤖 Bot Join Task #${task.id}\n\n` +
+            `📝 Title: ${task.title}\n` +
+            `📄 Description: ${task.description}\n` +
+            `🔗 Bot: ${task.link}\n\n` +
+            `💰 Reward: ${task.cpc.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+            `📊 Remaining Budget: ${remainingBudget} ${CONFIG.CURRENCY}\n` +
+            `🎯 Remaining Clicks: ${remainingClicks}\n\n` +
+            `📋 Instructions:\n` +
+            `1️⃣ Click "🤖 Start Bot" button\n` +
+            `2️⃣ Start the bot\n` +
+            `3️⃣ Interact with bot for 30+ seconds\n` +
+            `4️⃣ Click "✅ Task Complete"\n\n` +
+            `🎯 Available Tasks: ${availableBotTasks.length}`;
+          
+          bot.editMessageText(botTaskMessage, {
+            chat_id: chatId,
+            message_id: query.message?.message_id,
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '⏭️ Skip Task', callback_data: 'join_bots' },
+                  { text: '🤖 Start Bot', url: task.link }
+                ],
+                [{ text: '✅ Task Complete', callback_data: `complete_task_${task.id}` }],
+                [{ text: '🔙 Back', callback_data: 'back_to_main' }]
+              ]
+            }
+          });
+        }
+        break;
+
+      case 'more_tasks':
+        const allAvailableTasks = Object.values(advertisements).filter((ad: any) => 
+          ad.status === 'active' && 
+          ad.totalSpent < ad.totalBudget &&
+          !users[userId].completedTasks.includes(ad.id) &&
+          ad.userId !== userId
+        );
+
+        if (allAvailableTasks.length === 0) {
+          bot.editMessageText(`😄 More Tasks\n\n` +
+            `❌ No additional tasks available currently!\n\n` +
+            `🔄 Please check back later\n` +
+            `📊 Or create your own advertisements`, {
+            chat_id: chatId,
+            message_id: query.message?.message_id,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '📊 Create Advertisement', callback_data: 'advertise' }],
+                [
+                  { text: '🔄 Refresh', callback_data: 'more_tasks' },
+                  { text: '🔙 Back', callback_data: 'back_to_main' }
+                ]
+              ]
+            }
+          });
+        } else {
+          const siteTasks = allAvailableTasks.filter((ad: any) => ad.type === 'site_visits').length;
+          const channelTasks = allAvailableTasks.filter((ad: any) => ad.type === 'join_channels').length;
+          const botTasks = allAvailableTasks.filter((ad: any) => ad.type === 'join_bots').length;
+          const totalEarnings = allAvailableTasks.reduce((sum: number, ad: any) => sum + ad.cpc, 0);
+          
+          bot.editMessageText(`😄 All Available Tasks\n\n` +
+            `📊 Task Summary:\n` +
+            `🌐 Website Visits: ${siteTasks} tasks\n` +
+            `👥 Channel Joins: ${channelTasks} tasks\n` +
+            `🤖 Bot Starts: ${botTasks} tasks\n\n` +
+            `💰 Total Potential Earnings: ${totalEarnings.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+            `🎯 Total Available Tasks: ${allAvailableTasks.length}\n\n` +
+            `🚀 Choose a category to start earning!`, {
+            chat_id: chatId,
+            message_id: query.message?.message_id,
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: `🌐 Sites (${siteTasks})`, callback_data: 'visit_sites' },
+                  { text: `👥 Channels (${channelTasks})`, callback_data: 'join_channels' }
+                ],
+                [
+                  { text: `🤖 Bots (${botTasks})`, callback_data: 'join_bots' },
+                  { text: '🎁 Daily Bonus', callback_data: 'daily_bonus' }
+                ],
                 [{ text: '🔙 Back', callback_data: 'back_to_main' }]
               ]
             }
@@ -1006,6 +1317,31 @@ bot.on('callback_query', async (query) => {
       const task = advertisements[taskId];
       
       if (task && task.status === 'active' && !users[userId].completedTasks.includes(taskId)) {
+        // Check if budget is exhausted
+        if (task.totalSpent + task.cpc > task.totalBudget) {
+          // Mark ad as completed and inactive
+          advertisements[taskId].status = 'completed';
+          saveData();
+          
+          bot.answerCallbackQuery(query.id, { 
+            text: '❌ This advertisement has reached its budget limit!',
+            show_alert: true 
+          });
+          
+          // Notify advertiser
+          if (task.userId && users[task.userId]) {
+            bot.sendMessage(task.userId, 
+              `⏹️ Advertisement Completed - Budget Exhausted\n\n` +
+              `📊 Ad ID: ${taskId}\n` +
+              `📝 Title: ${task.title}\n` +
+              `💰 Total Spent: ${task.totalSpent.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+              `📊 Total Clicks: ${task.totalClicks}\n` +
+              `💎 Budget: ${task.totalBudget.toFixed(6)} ${CONFIG.CURRENCY}\n\n` +
+              `✅ Your advertisement campaign has been completed successfully!`);
+          }
+          return;
+        }
+        
         // Add reward
         users[userId].balance += task.cpc;
         users[userId].totalEarned += task.cpc;
@@ -1014,7 +1350,13 @@ bot.on('callback_query', async (query) => {
         
         // Update ad stats
         advertisements[taskId].totalClicks += 1;
+        advertisements[taskId].totalSpent += task.cpc;
         advertisements[taskId].spentToday += task.cpc;
+        
+        // Check if budget is now exhausted
+        if (advertisements[taskId].totalSpent >= advertisements[taskId].totalBudget) {
+          advertisements[taskId].status = 'completed';
+        }
         
         // Give referral bonus to referrer
         if (users[userId].referrerId && users[users[userId].referrerId]) {
@@ -1034,14 +1376,135 @@ bot.on('callback_query', async (query) => {
           show_alert: true 
         });
 
-        // Notify advertiser
+        // Notify advertiser with detailed stats
         if (task.userId && users[task.userId]) {
+          const remainingBudget = task.totalBudget - advertisements[taskId].totalSpent;
+          const completionRate = ((advertisements[taskId].totalSpent / task.totalBudget) * 100).toFixed(1);
+          
           bot.sendMessage(task.userId, 
-            `📈 New click on your advertisement!\n\n` +
+            `📈 New Click on Your Advertisement!\n\n` +
+            `📊 Ad ID: ${taskId}\n` +
+            `📝 Title: ${task.title}\n` +
             `💰 Cost: ${task.cpc.toFixed(6)} ${CONFIG.CURRENCY}\n` +
             `📊 Total Clicks: ${advertisements[taskId].totalClicks}\n` +
-            `🎯 Ad ID: ${taskId}`);
+            `💵 Total Spent: ${advertisements[taskId].totalSpent.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+            `💎 Remaining Budget: ${remainingBudget.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+            `📈 Progress: ${completionRate}%\n` +
+            `🟢 Status: ${advertisements[taskId].status}`);
         }
+      }
+    }
+
+    // Handle quick CPC selection
+    if (data.startsWith('set_ad_cpc_')) {
+      const cpc = parseFloat(data.split('_')[3]);
+      const tempAd = advertisements[`temp_${userId}`];
+      
+      if (tempAd && cpc >= CONFIG.MIN_CPC && cpc <= CONFIG.MAX_CPC) {
+        tempAd.cpc = cpc;
+        userStates[userId] = `creating_ad_${tempAd.type}_temp_budget`;
+        
+        const maxBudget = users[userId].balance;
+        const estimatedClicks = Math.floor(maxBudget / cpc);
+        
+        bot.editMessageText(`💎 Set Total Budget\n\n` +
+          `Enter your total advertisement budget:\n\n` +
+          `💰 Your Balance: ${maxBudget.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+          `💡 CPC Rate: ${cpc.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+          `📊 Estimated Clicks: ${estimatedClicks} clicks\n\n` +
+          `⚠️ Budget will be deducted from your balance`, {
+          chat_id: chatId,
+          message_id: query.message?.message_id,
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: `${cpc.toFixed(3)} ${CONFIG.CURRENCY}`, callback_data: `set_ad_budget_${cpc}` },
+                { text: `${(cpc * 10).toFixed(3)} ${CONFIG.CURRENCY}`, callback_data: `set_ad_budget_${cpc * 10}` }
+              ],
+              [
+                { text: `${(cpc * 50).toFixed(3)} ${CONFIG.CURRENCY}`, callback_data: `set_ad_budget_${cpc * 50}` },
+                { text: `All Balance`, callback_data: `set_ad_budget_${maxBudget}` }
+              ],
+              [{ text: '🔙 Back', callback_data: 'advertise' }]
+            ]
+          }
+        });
+      }
+    }
+
+    // Handle quick budget selection
+    if (data.startsWith('set_ad_budget_')) {
+      const budget = parseFloat(data.split('_')[3]);
+      const tempAd = advertisements[`temp_${userId}`];
+      
+      if (tempAd && budget > 0 && budget <= users[userId].balance && budget >= tempAd.cpc) {
+        // Create the advertisement
+        const adId = Date.now().toString();
+        const estimatedClicks = Math.floor(budget / tempAd.cpc);
+        
+        advertisements[adId] = {
+          id: adId,
+          userId,
+          title: tempAd.title,
+          description: tempAd.description,
+          link: tempAd.link,
+          type: tempAd.type === 'channel' ? 'join_channels' : 
+                tempAd.type === 'site' ? 'site_visits' : 'join_bots',
+          cpc: tempAd.cpc,
+          totalBudget: budget,
+          totalSpent: 0,
+          totalClicks: 0,
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          dailyBudget: budget,
+          spentToday: 0
+        };
+        
+        // Deduct budget from user balance
+        users[userId].balance -= budget;
+        users[userId].adsCreated = (users[userId].adsCreated || 0) + 1;
+        
+        // Clean up temp data
+        delete advertisements[`temp_${userId}`];
+        delete userStates[userId];
+        
+        saveData();
+        
+        bot.editMessageText(`✅ Advertisement Created Successfully!\n\n` +
+          `📊 Ad ID: ${adId}\n` +
+          `📝 Title: ${tempAd.title}\n` +
+          `💰 CPC: ${tempAd.cpc.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+          `💎 Budget: ${budget.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+          `📈 Estimated Clicks: ${estimatedClicks}\n` +
+          `🎯 Type: ${tempAd.type}\n` +
+          `🟢 Status: Active\n\n` +
+          `💰 Remaining Balance: ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n\n` +
+          `🚀 Your ad is now live and will be shown to users!`, {
+          chat_id: chatId,
+          message_id: query.message?.message_id,
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '📈 My Ads', callback_data: 'my_ads' },
+                { text: '📊 Create More', callback_data: 'advertise' }
+              ],
+              [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+            ]
+          }
+        });
+        
+        // Notify admin
+        bot.sendMessage(ADMIN_ID, 
+          `📢 New Advertisement Created - ${CONFIG.BOT_NAME}\n\n` +
+          `👤 User: ${users[userId].firstName} (@${users[userId].username || 'no username'})\n` +
+          `🆔 User ID: ${userId}\n` +
+          `📊 Ad ID: ${adId}\n` +
+          `📝 Title: ${tempAd.title}\n` +
+          `🎯 Type: ${tempAd.type}\n` +
+          `💰 CPC: ${tempAd.cpc.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+          `💎 Budget: ${budget.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+          `📈 Estimated Clicks: ${estimatedClicks}\n` +
+          `📅 Created: ${new Date().toLocaleString()}`);
       }
     }
 
@@ -1452,6 +1915,217 @@ bot.on('message', (msg) => {
         `💰 Amount: ${amount} ${CONFIG.CURRENCY}\n` +
         `💎 New Balance: ${users[targetUserId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n\n` +
         `🙏 Thank you for using ${CONFIG.BOT_NAME}!`);
+    }
+
+    // Advertisement creation handlers
+    else if (userState && userState.startsWith('creating_ad_')) {
+      const adType = userState.split('_')[2]; // channel, site, bot
+      const step = userState.split('_')[4]; // title, description, link, cpc, budget
+      
+      // Handle title input
+      if (step === 'title') {
+        if (!text || text.length > 50) {
+          return bot.sendMessage(chatId, '❌ Title must be 1-50 characters long. Please try again.');
+        }
+        
+        userStates[userId] = `creating_ad_${adType}_temp_description`;
+        advertisements[`temp_${userId}`] = { title: text, type: adType };
+        
+        bot.sendMessage(chatId, 
+          `📝 Advertisement Description\n\n` +
+          `Enter a detailed description for your advertisement:\n\n` +
+          `💡 Example: "Join our channel for daily crypto signals and trading tips!"\n` +
+          `📏 Maximum 200 characters\n\n` +
+          `⚠️ Make it attractive and informative`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🔙 Back', callback_data: 'advertise' }]
+              ]
+            }
+          });
+      }
+      
+      // Handle description input
+      else if (step === 'description') {
+        if (!text || text.length > 200) {
+          return bot.sendMessage(chatId, '❌ Description must be 1-200 characters long. Please try again.');
+        }
+        
+        advertisements[`temp_${userId}`].description = text;
+        userStates[userId] = `creating_ad_${adType}_temp_link`;
+        
+        const linkType = adType === 'channel' ? 'channel' : adType === 'site' ? 'website' : 'bot';
+        const linkExample = adType === 'channel' ? 'https://t.me/yourchannel' : 
+                           adType === 'site' ? 'https://yourwebsite.com' : 'https://t.me/yourbot';
+        
+        bot.sendMessage(chatId, 
+          `🔗 ${linkType.charAt(0).toUpperCase() + linkType.slice(1)} Link\n\n` +
+          `Enter your ${linkType} link:\n\n` +
+          `💡 Example: ${linkExample}\n\n` +
+          `⚠️ Make sure the link is working and accessible`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🔙 Back', callback_data: 'advertise' }]
+              ]
+            }
+          });
+      }
+      
+      // Handle link input
+      else if (step === 'link') {
+        if (!text || !text.startsWith('http')) {
+          return bot.sendMessage(chatId, '❌ Please enter a valid URL starting with http:// or https://');
+        }
+        
+        advertisements[`temp_${userId}`].link = text;
+        userStates[userId] = `creating_ad_${adType}_temp_cpc`;
+        
+        bot.sendMessage(chatId, 
+          `💰 Set CPC (Cost Per Click)\n\n` +
+          `Enter CPC rate (${CONFIG.MIN_CPC} - ${CONFIG.MAX_CPC} ${CONFIG.CURRENCY}):\n\n` +
+          `💡 Higher CPC = More visibility\n` +
+          `📊 Example: 0.01 (1 cent per click)\n\n` +
+          `💰 Your Balance: ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY}`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: `${CONFIG.MIN_CPC} ${CONFIG.CURRENCY}`, callback_data: `set_ad_cpc_${CONFIG.MIN_CPC}` },
+                  { text: `0.01 ${CONFIG.CURRENCY}`, callback_data: `set_ad_cpc_0.01` }
+                ],
+                [
+                  { text: `0.02 ${CONFIG.CURRENCY}`, callback_data: `set_ad_cpc_0.02` },
+                  { text: `0.05 ${CONFIG.CURRENCY}`, callback_data: `set_ad_cpc_0.05` }
+                ],
+                [{ text: '🔙 Back', callback_data: 'advertise' }]
+              ]
+            }
+          });
+      }
+      
+      // Handle CPC input
+      else if (step === 'cpc') {
+        const cpc = parseFloat(text);
+        if (isNaN(cpc) || cpc < CONFIG.MIN_CPC || cpc > CONFIG.MAX_CPC) {
+          return bot.sendMessage(chatId, 
+            `❌ Invalid CPC rate.\n\nPlease enter a number between ${CONFIG.MIN_CPC} and ${CONFIG.MAX_CPC} ${CONFIG.CURRENCY}`);
+        }
+        
+        advertisements[`temp_${userId}`].cpc = cpc;
+        userStates[userId] = `creating_ad_${adType}_temp_budget`;
+        
+        const maxBudget = users[userId].balance;
+        const estimatedClicks = Math.floor(maxBudget / cpc);
+        
+        bot.sendMessage(chatId, 
+          `💎 Set Total Budget\n\n` +
+          `Enter your total advertisement budget:\n\n` +
+          `💰 Your Balance: ${maxBudget.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+          `💡 CPC Rate: ${cpc.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+          `📊 Estimated Clicks: ${estimatedClicks} clicks\n\n` +
+          `⚠️ Budget will be deducted from your balance`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: `${cpc.toFixed(3)} ${CONFIG.CURRENCY}`, callback_data: `set_ad_budget_${cpc}` },
+                  { text: `${(cpc * 10).toFixed(3)} ${CONFIG.CURRENCY}`, callback_data: `set_ad_budget_${cpc * 10}` }
+                ],
+                [
+                  { text: `${(cpc * 50).toFixed(3)} ${CONFIG.CURRENCY}`, callback_data: `set_ad_budget_${cpc * 50}` },
+                  { text: `All Balance`, callback_data: `set_ad_budget_${maxBudget}` }
+                ],
+                [{ text: '🔙 Back', callback_data: 'advertise' }]
+              ]
+            }
+          });
+      }
+      
+      // Handle budget input
+      else if (step === 'budget') {
+        const budget = parseFloat(text);
+        const tempAd = advertisements[`temp_${userId}`];
+        
+        if (isNaN(budget) || budget <= 0 || budget > users[userId].balance) {
+          return bot.sendMessage(chatId, 
+            `❌ Invalid budget.\n\nPlease enter a valid amount (0.001 - ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY})`);
+        }
+        
+        if (budget < tempAd.cpc) {
+          return bot.sendMessage(chatId, 
+            `❌ Budget must be at least ${tempAd.cpc.toFixed(6)} ${CONFIG.CURRENCY} (1 click)\n\nPlease enter a higher amount.`);
+        }
+        
+        // Create the advertisement
+        const adId = Date.now().toString();
+        const estimatedClicks = Math.floor(budget / tempAd.cpc);
+        
+        advertisements[adId] = {
+          id: adId,
+          userId,
+          title: tempAd.title,
+          description: tempAd.description,
+          link: tempAd.link,
+          type: tempAd.type === 'channel' ? 'join_channels' : 
+                tempAd.type === 'site' ? 'site_visits' : 'join_bots',
+          cpc: tempAd.cpc,
+          totalBudget: budget,
+          totalSpent: 0,
+          totalClicks: 0,
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          dailyBudget: budget,
+          spentToday: 0
+        };
+        
+        // Deduct budget from user balance
+        users[userId].balance -= budget;
+        users[userId].adsCreated = (users[userId].adsCreated || 0) + 1;
+        
+        // Clean up temp data
+        delete advertisements[`temp_${userId}`];
+        delete userStates[userId];
+        
+        saveData();
+        
+        bot.sendMessage(chatId, 
+          `✅ Advertisement Created Successfully!\n\n` +
+          `📊 Ad ID: ${adId}\n` +
+          `📝 Title: ${tempAd.title}\n` +
+          `💰 CPC: ${tempAd.cpc.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+          `💎 Budget: ${budget.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+          `📈 Estimated Clicks: ${estimatedClicks}\n` +
+          `🎯 Type: ${tempAd.type}\n` +
+          `🟢 Status: Active\n\n` +
+          `💰 Remaining Balance: ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n\n` +
+          `🚀 Your ad is now live and will be shown to users!`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '📈 My Ads', callback_data: 'my_ads' },
+                  { text: '📊 Create More', callback_data: 'advertise' }
+                ],
+                [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+              ]
+            }
+          });
+        
+        // Notify admin
+        bot.sendMessage(ADMIN_ID, 
+          `📢 New Advertisement Created - ${CONFIG.BOT_NAME}\n\n` +
+          `👤 User: ${users[userId].firstName} (@${users[userId].username || 'no username'})\n` +
+          `🆔 User ID: ${userId}\n` +
+          `📊 Ad ID: ${adId}\n` +
+          `📝 Title: ${tempAd.title}\n` +
+          `🎯 Type: ${tempAd.type}\n` +
+          `💰 CPC: ${tempAd.cpc.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+          `💎 Budget: ${budget.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+          `📈 Estimated Clicks: ${estimatedClicks}\n` +
+          `📅 Created: ${new Date().toLocaleString()}`);
+      }
     }
 
   } catch (error) {
