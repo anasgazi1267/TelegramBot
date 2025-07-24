@@ -3,12 +3,13 @@
     "id": 7391363898,
     "username": "Owner_Anas1",
     "firstName": "Anas",
-    "balance": 0,
+    "balance": 0.2,
     "referrals": 0,
     "referrerId": null,
     "joinedAt": "2025-07-24T05:31:20.647Z",
     "totalEarned": 0,
-    "tasksCompleted": 0
+    "tasksCompleted": 0,
+    "totalDeposited": null
   },
   "8017773342": {
     "id": 8017773342,

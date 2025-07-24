@@ -1,1 +1,12 @@
-{}
+{
+  "1753343983150": {
+    "id": "1753343983150",
+    "userId": 7391363898,
+    "amount": 0.2,
+    "method": "Binance Pay",
+    "status": "approved",
+    "createdAt": "2025-07-24T07:59:43.150Z",
+    "proof": "text_provided",
+    "approvedAt": "2025-07-24T07:59:55.775Z"
+  }
+}
