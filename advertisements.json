@@ -8,27 +8,11 @@
     "type": "join_channels",
     "cpc": 0.005,
     "totalBudget": 0.2,
-    "totalSpent": 0.01,
-    "totalClicks": 2,
-    "status": "active",
-    "createdAt": "2025-07-24T08:49:47.240Z",
-    "dailyBudget": 0.2,
-    "spentToday": 0.01
-  },
-  "1753350042514": {
-    "id": "1753350042514",
-    "userId": 6371949611,
-    "title": "সবাই আমার ভোটে জয়েন করুন",
-    "description": "জয়েন করুন সবাই এই বটে ভালো ইনকাম করতে পারবেন খুব ভালো একটা বট",
-    "link": "https://t.me/taka_ay_bot?start=Bot35711064",
-    "type": "join_bots",
-    "cpc": 0.005,
-    "totalBudget": 0.25,
     "totalSpent": 0.005,
     "totalClicks": 1,
     "status": "active",
-    "createdAt": "2025-07-24T09:40:42.514Z",
-    "dailyBudget": 0.25,
+    "createdAt": "2025-07-24T08:49:47.240Z",
+    "dailyBudget": 0.2,
     "spentToday": 0.005
   }
 }
