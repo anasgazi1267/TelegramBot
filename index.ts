@@ -7,10 +7,10 @@ import * as path from 'path';
 const BOT_TOKEN = '7887918168:AAEpThFn3nIzg62w16hQwp43Lo-FXFRSwWw';
 const ADMIN_ID = 7391363898;
 const REQUIRED_CHANNELS = [
-  '@AnasEarnHunter',
-  '@ExpossDark', 
-  '@Anas_Promotion',
-  '@givwas'
+  'https://t.me/AnasEarnHunter',
+  'https://t.me/ExpossDark', 
+  'https://t.me/Anas_Promotion',
+  'https://t.me/givwas'
 ];
 
 // Constants
@@ -25,7 +25,8 @@ const CONFIG = {
   MAX_WITHDRAW: 500,
   CURRENCY: 'USDT',
   BINANCE_PAY_ID: '787819330',
-  PAYEER_ID: 'P1102512228'
+  PAYEER_ID: 'P1102512228',
+  BOT_USERNAME: '@task_cpbot'
 };
 
 // Data storage
@@ -65,13 +66,15 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 const checkChannelMembership = async (userId: number): Promise<boolean> => {
   try {
     for (const channel of REQUIRED_CHANNELS) {
-      const member = await bot.getChatMember(channel, userId);
+      const channelUsername = channel.replace('https://t.me/', '@');
+      const member = await bot.getChatMember(channelUsername, userId);
       if (member.status === 'left' || member.status === 'kicked') {
         return false;
       }
     }
     return true;
   } catch (error) {
+    console.log(`Error checking membership for user ${userId}:`, error);
     return false;
   }
 };
@@ -123,33 +126,18 @@ const getAdvertiseKeyboard = () => {
           { text: '💬 Group Members', callback_data: 'ad_group_members' }
         ],
         [
-          { text: '🤖 Bot', callback_data: 'ad_bot' }
+          { text: '🤖 Bot Members', callback_data: 'ad_bot' }
         ],
         [
           { text: '📊 Post Views', callback_data: 'ad_post_views' },
-          { text: '🔗 Link Visits', callback_data: 'ad_link_visits' }
+          { text: '🔗 Site Visits', callback_data: 'ad_site_visits' }
         ],
         [
-          { text: '🐦 Twitter Engagement', callback_data: 'ad_twitter' }
+          { text: '🐦 Twitter Engagement', callback_data: 'ad_twitter' },
+          { text: '📱 YouTube Views', callback_data: 'ad_youtube' }
         ],
         [
-          { text: '🔙 Back', callback_data: 'back_to_main' }
-        ]
-      ]
-    }
-  };
-};
-
-// More tasks keyboard
-const getMoreTasksKeyboard = () => {
-  return {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: '📊 TG Post Views', callback_data: 'tg_post_views' },
-          { text: '🐦 Twitter Raids', callback_data: 'twitter_raids' }
-        ],
-        [
+          { text: '📈 My Ads', callback_data: 'my_ads' },
           { text: '🔙 Back', callback_data: 'back_to_main' }
         ]
       ]
@@ -207,6 +195,10 @@ const getAdminKeyboard = () => {
         [
           { text: '📊 Advertisements', callback_data: 'admin_ads' },
           { text: '⚙️ Settings', callback_data: 'admin_settings' }
+        ],
+        [
+          { text: '📊 Statistics', callback_data: 'admin_stats' },
+          { text: '💰 Balance Management', callback_data: 'admin_balance' }
         ]
       ]
     }
@@ -217,7 +209,7 @@ const getAdminKeyboard = () => {
 bot.onText(/\/start(.*)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const userId = msg.from?.id!;
-  const username = msg.from?.username || 'Unknown';
+  const username = msg.from?.username || '';
   const firstName = msg.from?.first_name || 'User';
   
   // Check if user joined required channels
@@ -261,7 +253,11 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
       joinedAt: new Date().toISOString(),
       totalEarned: 0,
       tasksCompleted: 0,
-      completedTasks: []
+      completedTasks: [],
+      totalDeposited: 0,
+      totalWithdrawn: 0,
+      adsCreated: 0,
+      isActive: true
     };
 
     // Give referral bonus
@@ -272,41 +268,48 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
       
       // Notify referrer
       bot.sendMessage(referrerId, 
-        `🎉 New referral! ${firstName} joined using your link.\n` +
-        `💰 You earned ${CONFIG.REF_BONUS} ${CONFIG.CURRENCY}!`
+        `🎉 নতুন রেফারেল! ${firstName} আপনার লিংক ব্যবহার করে যোগ দিয়েছে।\n` +
+        `💰 আপনি ${CONFIG.REF_BONUS} ${CONFIG.CURRENCY} পেয়েছেন!`
       );
 
-      // Notify admin
-      bot.sendMessage(ADMIN_ID, 
-        `🆕 New User Alert!\n\n` +
-        `👤 User: ${firstName} (@${username})\n` +
-        `🆔 ID: ${userId}\n` +
-        `👥 Referred by: ${users[referrerId].firstName} (${referrerId})\n` +
-        `💰 Referral bonus: ${CONFIG.REF_BONUS} ${CONFIG.CURRENCY}`
-      );
+      // Notify admin with detailed info
+      const adminNotification = `🆕 NEW USER JOINED!\n\n` +
+        `👤 User: ${firstName}\n` +
+        `🆔 User ID: ${userId}\n` +
+        `👥 Username: @${username || 'No username'}\n` +
+        `📍 Referred by: ${users[referrerId].firstName} (ID: ${referrerId})\n` +
+        `💰 Referral bonus given: ${CONFIG.REF_BONUS} ${CONFIG.CURRENCY}\n` +
+        `📅 Join time: ${new Date().toLocaleString()}\n` +
+        `📊 Total users now: ${Object.keys(users).length + 1}`;
+      
+      bot.sendMessage(ADMIN_ID, adminNotification);
     } else {
       // Notify admin of new user without referrer
-      bot.sendMessage(ADMIN_ID, 
-        `🆕 New User Alert!\n\n` +
-        `👤 User: ${firstName} (@${username})\n` +
-        `🆔 ID: ${userId}\n` +
-        `👥 No referrer`
-      );
+      const adminNotification = `🆕 NEW USER JOINED!\n\n` +
+        `👤 User: ${firstName}\n` +
+        `🆔 User ID: ${userId}\n` +
+        `👥 Username: @${username || 'No username'}\n` +
+        `📍 No referrer\n` +
+        `📅 Join time: ${new Date().toLocaleString()}\n` +
+        `📊 Total users now: ${Object.keys(users).length + 1}`;
+      
+      bot.sendMessage(ADMIN_ID, adminNotification);
     }
 
     saveData();
   }
 
-  const welcomeMessage = `🎉 Welcome ${firstName}!\n\n` +
-    `💰 Balance: ${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}\n` +
-    `👥 Referrals: ${users[userId].referrals}\n\n` +
-    `Earn by completing simple tasks:\n\n` +
-    `📱 Visit Sites - Earn by clicking links\n` +
-    `👥 Join Channels - Earn by joining chats\n` +
-    `🤖 Join Bots - Earn by talking to bots\n` +
-    `😄 More - TG Post Views, Twitter Raids\n\n` +
-    `You can also create your own ads with /advertise\n\n` +
-    `Use the /help command or read @ClickBeeFAQ for more info`;
+  const welcomeMessage = `🎉 স্বাগতম ${firstName}!\n\n` +
+    `💰 ব্যালেন্স: ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+    `👥 রেফারেল: ${users[userId].referrals}\n` +
+    `🎯 কমপ্লিট টাস্ক: ${users[userId].tasksCompleted}\n\n` +
+    `🚀 সহজ টাস্ক করে টাকা আয় করুন:\n\n` +
+    `📱 Visit Sites - লিংক ক্লিক করে আয় করুন\n` +
+    `👥 Join Channels - চ্যানেল জয়েন করে আয় করুন\n` +
+    `🤖 Join Bots - বট জয়েন করে আয় করুন\n` +
+    `😄 More - আরো টাস্ক এবং সুবিধা\n\n` +
+    `📊 নিজের বিজ্ঞাপন তৈরি করুন /advertise দিয়ে\n\n` +
+    `ℹ️ সাহায্যের জন্য /help কমান্ড ব্যবহার করুন`;
 
   bot.sendMessage(chatId, welcomeMessage, getMainKeyboard());
 });
@@ -317,118 +320,28 @@ bot.onText(/\/admin/, (msg) => {
   const userId = msg.from?.id!;
 
   if (userId !== ADMIN_ID) {
-    return bot.sendMessage(chatId, '❌ Access denied');
+    return bot.sendMessage(chatId, '❌ Access denied. Only admin can use this command.');
   }
 
   const totalUsers = Object.keys(users).length;
+  const activeUsers = Object.values(users).filter((u: any) => u.isActive).length;
+  const totalBalance = Object.values(users).reduce((sum: number, u: any) => sum + u.balance, 0);
   const pendingDeposits = Object.values(deposits).filter((d: any) => d.status === 'pending').length;
   const pendingWithdrawals = Object.values(withdrawals).filter((w: any) => w.status === 'pending').length;
-  const pendingAds = Object.values(advertisements).filter((a: any) => a.status === 'pending').length;
+  const activeAds = Object.values(advertisements).filter((a: any) => a.status === 'active').length;
 
-  const adminMessage = `👑 Admin Panel\n\n` +
-    `📊 Statistics:\n` +
+  const adminMessage = `👑 ADMIN PANEL\n\n` +
+    `📊 STATISTICS:\n` +
     `👥 Total Users: ${totalUsers}\n` +
+    `✅ Active Users: ${activeUsers}\n` +
+    `💰 Total Balance: ${totalBalance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
     `💳 Pending Deposits: ${pendingDeposits}\n` +
     `🏧 Pending Withdrawals: ${pendingWithdrawals}\n` +
-    `📢 Pending Ads: ${pendingAds}`;
+    `📢 Active Ads: ${activeAds}\n\n` +
+    `🤖 Bot: ${CONFIG.BOT_USERNAME}\n` +
+    `👑 Admin ID: ${ADMIN_ID}`;
 
   bot.sendMessage(chatId, adminMessage, getAdminKeyboard());
-});
-
-// Handle all commands
-bot.onText(/\/(help|balance|withdraw|referrals|airdrop|premium|advertise)/, (msg, match) => {
-  const chatId = msg.chat.id;
-  const userId = msg.from?.id!;
-  const command = match?.[1];
-
-  if (!users[userId]) {
-    return bot.sendMessage(chatId, 'Please start the bot first with /start');
-  }
-
-  switch (command) {
-    case 'help':
-      const helpMessage = `Here are all my commands:\n\n` +
-        `/start - Show the main menu\n` +
-        `/advertise - Create or manage your ads\n` +
-        `/balance - Show your balance\n` +
-        `/withdraw - Withdraw balance\n` +
-        `/referrals - Referral details\n` +
-        `/airdrop - ClickBee Token Airdrop\n` +
-        `/premium - ClickBee Premium 💎\n` +
-        `/help - Show help\n\n` +
-        `Visit our FAQ channel for more info.\n\n` +
-        `📊 Statistics\n` +
-        `🔢 Total: ${Object.keys(users).length} users\n` +
-        `🆕 New(last 24 hours): ${Object.values(users).filter((u: any) => {
-          const joinDate = new Date(u.joinedAt);
-          const now = new Date();
-          return (now.getTime() - joinDate.getTime()) < 24 * 60 * 60 * 1000;
-        }).length} users\n\n` +
-        `Join our official channel at @AnasEarnHunter\n` +
-        `👥 Join the talks at @AnasEarningDisc\n` +
-        `& for technical support contact @Owner_Anas1📞`;
-      
-      bot.sendMessage(chatId, helpMessage, {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '🪙 ClickBee Token', callback_data: 'clickbee_token' },
-              { text: '💎 Premium', callback_data: 'premium' }
-            ],
-            [
-              { text: '⚙️ Settings', callback_data: 'settings' }
-            ],
-            [
-              { text: '🔙 Back', callback_data: 'back_to_main' }
-            ]
-          ]
-        }
-      });
-      break;
-
-    case 'balance':
-      const balanceMessage = `💰 Account Details:\n\n` +
-        `💎 Balance\n${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}\n\n` +
-        `💎 Available for payout\n${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}\n\n` +
-        `Click « Open Wallet » to access your wallet:`;
-      
-      bot.sendMessage(chatId, balanceMessage, {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '🌸 Open Wallet 🌸', callback_data: 'open_wallet' }
-            ]
-          ]
-        }
-      });
-      break;
-
-    case 'referrals':
-      const refMessage = `👥 Referrals\n\n` +
-        `🔍 You currently have ${users[userId].referrals} referrals.\n\n` +
-        `💰 You will earn 20% of your friend's earnings from tasks and 5% if they create ads.\n\n` +
-        `Send this unique invite link to your friends:\n` +
-        `${generateReferralLink(userId)}\n\n` +
-        `• You can withdraw referral income to an external wallet or spend it on ads.`;
-      
-      bot.sendMessage(chatId, refMessage, {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '📊 View User Stats', callback_data: 'user_stats' }
-            ],
-            [
-              { text: 'Share ➡️', callback_data: 'share_referral' }
-            ]
-          ]
-        }
-      });
-      break;
-
-    case 'advertise':
-      bot.sendMessage(chatId, `📊 Advertise 📊\n\nWhat would you like to promote?\n\nChoose an option below... 👇`, getAdvertiseKeyboard());
-      break;
-  }
 });
 
 // Handle callback queries
@@ -438,47 +351,39 @@ bot.on('callback_query', async (query) => {
   const data = query.data;
   
   if (!users[userId] && data !== 'check_membership') {
-    return bot.answerCallbackQuery(query.id, { text: 'Please start the bot first with /start' });
+    return bot.answerCallbackQuery(query.id, { text: 'প্রথমে /start দিয়ে বট চালু করুন' });
   }
 
   switch (data) {
     case 'check_membership':
       const hasJoined = await checkChannelMembership(userId);
       if (hasJoined) {
-        bot.answerCallbackQuery(query.id, { text: '✅ Membership verified!' });
+        bot.answerCallbackQuery(query.id, { text: '✅ সদস্যপদ নিশ্চিত!' });
         bot.sendMessage(chatId, '/start');
       } else {
-        bot.answerCallbackQuery(query.id, { text: '❌ Please join all channels first!' });
+        bot.answerCallbackQuery(query.id, { text: '❌ প্রথমে সব চ্যানেল জয়েন করুন!' });
       }
       break;
 
     case 'balance':
-      const balanceMessage = `💰 Your Balance\n\n` +
-        `💵 Current: ${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}\n` +
-        `📈 Total Earned: ${users[userId].totalEarned.toFixed(4)} ${CONFIG.CURRENCY}\n` +
-        `✅ Tasks Completed: ${users[userId].tasksCompleted}`;
+      const balanceMessage = `💰 আপনার ব্যালেন্স\n\n` +
+        `💵 বর্তমান ব্যালেন্স: ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+        `📈 মোট আয়: ${users[userId].totalEarned.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+        `📥 মোট জমা: ${users[userId].totalDeposited.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+        `📤 মোট উত্তোলন: ${users[userId].totalWithdrawn.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+        `✅ সম্পন্ন টাস্ক: ${users[userId].tasksCompleted}\n` +
+        `📊 তৈরি বিজ্ঞাপন: ${users[userId].adsCreated}\n\n` +
+        `💡 আরো টাকা আয় করতে টাস্ক করুন বা বিজ্ঞাপন তৈরি করুন!`;
+      
       bot.editMessageText(balanceMessage, {
         chat_id: chatId,
         message_id: query.message?.message_id,
         reply_markup: {
           inline_keyboard: [
-            [{ text: '🔙 Back', callback_data: 'back_to_main' }]
-          ]
-        }
-      });
-      break;
-
-    case 'referrals':
-      const refMessage = `👥 Referral Stats\n\n` +
-        `👤 Total Referrals: ${users[userId].referrals}\n` +
-        `💰 Bonus per referral: ${CONFIG.REF_BONUS} ${CONFIG.CURRENCY}\n` +
-        `💵 Total from referrals: ${(users[userId].referrals * CONFIG.REF_BONUS).toFixed(4)} ${CONFIG.CURRENCY}\n\n` +
-        `🔗 Your referral link:\n${generateReferralLink(userId)}`;
-      bot.editMessageText(refMessage, {
-        chat_id: chatId,
-        message_id: query.message?.message_id,
-        reply_markup: {
-          inline_keyboard: [
+            [
+              { text: '💳 Deposit', callback_data: 'deposit' },
+              { text: '🏧 Withdraw', callback_data: 'withdraw' }
+            ],
             [{ text: '🔙 Back', callback_data: 'back_to_main' }]
           ]
         }
@@ -486,10 +391,13 @@ bot.on('callback_query', async (query) => {
       break;
 
     case 'deposit':
-      const depositMessage = `💳 Deposit ${CONFIG.CURRENCY}\n\n` +
-        `💰 Minimum: ${CONFIG.MIN_DEPOSIT} ${CONFIG.CURRENCY}\n` +
-        `💰 Maximum: ${CONFIG.MAX_DEPOSIT} ${CONFIG.CURRENCY}\n\n` +
-        `Choose your payment method:`;
+      const depositMessage = `💳 ${CONFIG.CURRENCY} জমা করুন\n\n` +
+        `💰 সর্বনিম্ন: ${CONFIG.MIN_DEPOSIT} ${CONFIG.CURRENCY}\n` +
+        `💰 সর্বোচ্চ: ${CONFIG.MAX_DEPOSIT} ${CONFIG.CURRENCY}\n\n` +
+        `🏦 পেমেন্ট পদ্ধতি নির্বাচন করুন:\n\n` +
+        `🟡 Binance Pay - দ্রুত এবং নিরাপদ\n` +
+        `🔵 Payeer - সহজ এবং সুবিধাজনক`;
+      
       bot.editMessageText(depositMessage, {
         chat_id: chatId,
         message_id: query.message?.message_id,
@@ -499,13 +407,22 @@ bot.on('callback_query', async (query) => {
 
     case 'deposit_binance':
       userStates[userId] = 'awaiting_deposit_amount_binance';
-      bot.editMessageText(`🟡 Binance Pay Deposit\n\n` +
-        `💰 Enter deposit amount (${CONFIG.MIN_DEPOSIT} - ${CONFIG.MAX_DEPOSIT} ${CONFIG.CURRENCY}):\n\n` +
-        `💡 Send the amount as a number (e.g., 10.50)`, {
+      bot.editMessageText(`🟡 Binance Pay জমা\n\n` +
+        `💰 জমার পরিমাণ লিখুন (${CONFIG.MIN_DEPOSIT} - ${CONFIG.MAX_DEPOSIT} ${CONFIG.CURRENCY}):\n\n` +
+        `💡 শুধু সংখ্যা লিখুন (যেমন: 10.50)\n\n` +
+        `⚠️ সঠিক পরিমাণ লিখুন, কারণ এটাই আপনার অ্যাকাউন্টে যোগ হবে।`, {
         chat_id: chatId,
         message_id: query.message?.message_id,
         reply_markup: {
           inline_keyboard: [
+            [
+              { text: `${CONFIG.MIN_DEPOSIT} ${CONFIG.CURRENCY}`, callback_data: `set_deposit_amount_binance_${CONFIG.MIN_DEPOSIT}` },
+              { text: `1 ${CONFIG.CURRENCY}`, callback_data: `set_deposit_amount_binance_1` }
+            ],
+            [
+              { text: `5 ${CONFIG.CURRENCY}`, callback_data: `set_deposit_amount_binance_5` },
+              { text: `10 ${CONFIG.CURRENCY}`, callback_data: `set_deposit_amount_binance_10` }
+            ],
             [{ text: '🔙 Back', callback_data: 'deposit' }]
           ]
         }
@@ -514,13 +431,22 @@ bot.on('callback_query', async (query) => {
 
     case 'deposit_payeer':
       userStates[userId] = 'awaiting_deposit_amount_payeer';
-      bot.editMessageText(`🔵 Payeer Deposit\n\n` +
-        `💰 Enter deposit amount (${CONFIG.MIN_DEPOSIT} - ${CONFIG.MAX_DEPOSIT} ${CONFIG.CURRENCY}):\n\n` +
-        `💡 Send the amount as a number (e.g., 10.50)`, {
+      bot.editMessageText(`🔵 Payeer জমা\n\n` +
+        `💰 জমার পরিমাণ লিখুন (${CONFIG.MIN_DEPOSIT} - ${CONFIG.MAX_DEPOSIT} ${CONFIG.CURRENCY}):\n\n` +
+        `💡 শুধু সংখ্যা লিখুন (যেমন: 10.50)\n\n` +
+        `⚠️ সঠিক পরিমাণ লিখুন, কারণ এটাই আপনার অ্যাকাউন্টে যোগ হবে।`, {
         chat_id: chatId,
         message_id: query.message?.message_id,
         reply_markup: {
           inline_keyboard: [
+            [
+              { text: `${CONFIG.MIN_DEPOSIT} ${CONFIG.CURRENCY}`, callback_data: `set_deposit_amount_payeer_${CONFIG.MIN_DEPOSIT}` },
+              { text: `1 ${CONFIG.CURRENCY}`, callback_data: `set_deposit_amount_payeer_1` }
+            ],
+            [
+              { text: `5 ${CONFIG.CURRENCY}`, callback_data: `set_deposit_amount_payeer_5` },
+              { text: `10 ${CONFIG.CURRENCY}`, callback_data: `set_deposit_amount_payeer_10` }
+            ],
             [{ text: '🔙 Back', callback_data: 'deposit' }]
           ]
         }
@@ -530,15 +456,18 @@ bot.on('callback_query', async (query) => {
     case 'withdraw':
       if (users[userId].balance < CONFIG.MIN_WITHDRAW) {
         bot.answerCallbackQuery(query.id, { 
-          text: `❌ Minimum withdrawal: ${CONFIG.MIN_WITHDRAW} ${CONFIG.CURRENCY}`,
+          text: `❌ সর্বনিম্ন উত্তোলন: ${CONFIG.MIN_WITHDRAW} ${CONFIG.CURRENCY}`,
           show_alert: true 
         });
       } else {
-        const withdrawMsg = `🏧 Withdraw ${CONFIG.CURRENCY}\n\n` +
-          `💰 Available: ${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}\n` +
-          `💰 Minimum: ${CONFIG.MIN_WITHDRAW} ${CONFIG.CURRENCY}\n` +
-          `💰 Maximum: ${CONFIG.MAX_WITHDRAW} ${CONFIG.CURRENCY}\n\n` +
-          `Choose your payment method:`;
+        const withdrawMsg = `🏧 ${CONFIG.CURRENCY} উত্তোলন\n\n` +
+          `💰 উপলব্ধ: ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+          `💰 সর্বনিম্ন: ${CONFIG.MIN_WITHDRAW} ${CONFIG.CURRENCY}\n` +
+          `💰 সর্বোচ্চ: ${CONFIG.MAX_WITHDRAW} ${CONFIG.CURRENCY}\n\n` +
+          `🏦 পেমেন্ট পদ্ধতি নির্বাচন করুন:\n\n` +
+          `🟡 Binance Pay - দ্রুত প্রসেসিং\n` +
+          `🔵 Payeer - তাৎক্ষণিক পেমেন্ট`;
+        
         bot.editMessageText(withdrawMsg, {
           chat_id: chatId,
           message_id: query.message?.message_id,
@@ -549,14 +478,19 @@ bot.on('callback_query', async (query) => {
 
     case 'withdraw_binance':
       userStates[userId] = 'awaiting_withdraw_amount_binance';
-      bot.editMessageText(`🟡 Binance Pay Withdrawal\n\n` +
-        `💰 Available: ${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}\n` +
-        `💰 Enter withdrawal amount (${CONFIG.MIN_WITHDRAW} - ${Math.min(CONFIG.MAX_WITHDRAW, users[userId].balance).toFixed(4)} ${CONFIG.CURRENCY}):\n\n` +
-        `💡 Send the amount as a number (e.g., 10.50)`, {
+      const maxWithdrawBinance = Math.min(CONFIG.MAX_WITHDRAW, users[userId].balance);
+      bot.editMessageText(`🟡 Binance Pay উত্তোলন\n\n` +
+        `💰 উপলব্ধ: ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+        `💰 উত্তোলনের পরিমাণ লিখুন (${CONFIG.MIN_WITHDRAW} - ${maxWithdrawBinance.toFixed(6)} ${CONFIG.CURRENCY}):\n\n` +
+        `💡 শুধু সংখ্যা লিখুন (যেমন: 5.50)`, {
         chat_id: chatId,
         message_id: query.message?.message_id,
         reply_markup: {
           inline_keyboard: [
+            [
+              { text: `${CONFIG.MIN_WITHDRAW} ${CONFIG.CURRENCY}`, callback_data: `set_withdraw_amount_binance_${CONFIG.MIN_WITHDRAW}` },
+              { text: `সব উত্তোলন`, callback_data: `set_withdraw_amount_binance_${users[userId].balance}` }
+            ],
             [{ text: '🔙 Back', callback_data: 'withdraw' }]
           ]
         }
@@ -565,160 +499,110 @@ bot.on('callback_query', async (query) => {
 
     case 'withdraw_payeer':
       userStates[userId] = 'awaiting_withdraw_amount_payeer';
-      bot.editMessageText(`🔵 Payeer Withdrawal\n\n` +
-        `💰 Available: ${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}\n` +
-        `💰 Enter withdrawal amount (${CONFIG.MIN_WITHDRAW} - ${Math.min(CONFIG.MAX_WITHDRAW, users[userId].balance).toFixed(4)} ${CONFIG.CURRENCY}):\n\n` +
-        `💡 Send the amount as a number (e.g., 10.50)`, {
+      const maxWithdrawPayeer = Math.min(CONFIG.MAX_WITHDRAW, users[userId].balance);
+      bot.editMessageText(`🔵 Payeer উত্তোলন\n\n` +
+        `💰 উপলব্ধ: ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+        `💰 উত্তোলনের পরিমাণ লিখুন (${CONFIG.MIN_WITHDRAW} - ${maxWithdrawPayeer.toFixed(6)} ${CONFIG.CURRENCY}):\n\n` +
+        `💡 শুধু সংখ্যা লিখুন (যেমন: 5.50)`, {
         chat_id: chatId,
         message_id: query.message?.message_id,
         reply_markup: {
           inline_keyboard: [
+            [
+              { text: `${CONFIG.MIN_WITHDRAW} ${CONFIG.CURRENCY}`, callback_data: `set_withdraw_amount_payeer_${CONFIG.MIN_WITHDRAW}` },
+              { text: `সব উত্তোলন`, callback_data: `set_withdraw_amount_payeer_${users[userId].balance}` }
+            ],
             [{ text: '🔙 Back', callback_data: 'withdraw' }]
           ]
         }
       });
       break;
 
-    case 'visit_sites':
-      // Sample task
-      const siteTaskMessage = `Hassle-Free Bitcoin Mining on the Cloud without technical expertise or big investments! 📈\n\n` +
-        `_________________________\n\n` +
-        `👆 Mission: Engage with this website.\n\n` +
-        `❓ Press « 🌐 Open Link » and browse the website.\n\n` +
-        `💰 Reward: ${(Math.random() * 0.01 + 0.001).toFixed(4)} ${CONFIG.CURRENCY}`;
-      
-      bot.editMessageText(siteTaskMessage, {
-        chat_id: chatId,
-        message_id: query.message?.message_id,
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '⏭️ Skip', callback_data: 'skip_task' },
-              { text: '🌐 Open Link 🌐', callback_data: 'open_link' }
-            ],
-            [
-              { text: '🔙 Back', callback_data: 'back_to_main' }
-            ]
-          ]
-        }
-      });
-      break;
-
-    case 'join_channels':
-      bot.editMessageText(`❌ Oh no! There are NO TASKS available at the moment. Please check back later! 🔄\n\nYou can promote your own channels, groups, or bots with /advertise.`, {
-        chat_id: chatId,
-        message_id: query.message?.message_id,
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '➕ Create New Ad ➕', callback_data: 'create_ad' }
-            ],
-            [
-              { text: '🔙 Back', callback_data: 'back_to_main' }
-            ]
-          ]
-        }
-      });
-      break;
-
-    case 'join_bots':
-      bot.editMessageText(`❌ Oh no! There are NO TASKS available at the moment. Please check back later! 🔄\n\nYou can promote your own channels, groups, or bots with /advertise.`, {
-        chat_id: chatId,
-        message_id: query.message?.message_id,
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '➕ Create New Ad ➕', callback_data: 'create_ad' }
-            ],
-            [
-              { text: '🔙 Back', callback_data: 'back_to_main' }
-            ]
-          ]
-        }
-      });
-      break;
-
-    case 'more_tasks':
-      bot.editMessageText(`😄 More Tasks\n\nChoose a task category:`, {
-        chat_id: chatId,
-        message_id: query.message?.message_id,
-        ...getMoreTasksKeyboard()
-      });
-      break;
-
     case 'advertise':
-      bot.editMessageText(`📊 Advertise 📊\n\nWhat would you like to promote?\n\nChoose an option below... 👇`, {
+      bot.editMessageText(`📊 প্রফেশনাল বিজ্ঞাপন সিস্টেম\n\n` +
+        `🎯 আপনি কী প্রমোট করতে চান?\n\n` +
+        `💡 আপনার বিজ্ঞাপনের জন্য কাস্টমাইজড CPC সেট করুন এবং টার্গেট অডিয়েন্স পান।\n\n` +
+        `📈 আপনার বিজ্ঞাপনের পারফরমেন্স ট্র্যাক করুন এবং ROI বৃদ্ধি করুন।`, {
         chat_id: chatId,
         message_id: query.message?.message_id,
         ...getAdvertiseKeyboard()
       });
       break;
 
-    case 'ad_channel_members':
-      userStates[userId] = 'awaiting_channel_link';
-      bot.editMessageText(`🔗 Send the PUBLIC LINK of your channel/group\n\n` +
-        `ℹ️ Please make sure the link starts with https://t.me/.\n` +
-        `ℹ️ Alternatively, you can share the @username (including @.....)\n\n` +
-        `Members will join your channels or groups immediately after you activate this ad!\n\n` +
-        `👇 Send the link to your channel or group now.`, {
-        chat_id: chatId,
-        message_id: query.message?.message_id,
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '🔙 Back', callback_data: 'advertise' }]
-          ]
-        }
-      });
-      break;
+    case 'visit_sites':
+      // Generate available site visiting tasks
+      const availableSiteTasks = Object.values(advertisements).filter((ad: any) => 
+        ad.status === 'active' && 
+        ad.type === 'site_visits' && 
+        ad.spentToday < ad.dailyBudget &&
+        !users[userId].completedTasks.includes(ad.id)
+      );
 
-    case 'ad_group_members':
-      userStates[userId] = 'awaiting_group_link';
-      bot.editMessageText(`🔗 Send the PUBLIC LINK of your channel/group\n\n` +
-        `ℹ️ Please make sure the link starts with https://t.me/.\n` +
-        `ℹ️ Alternatively, you can share the @username (including @.....)\n\n` +
-        `Members will join your channels or groups immediately after you activate this ad!\n\n` +
-        `👇 Send the link to your channel or group now.`, {
-        chat_id: chatId,
-        message_id: query.message?.message_id,
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '🔙 Back', callback_data: 'advertise' }]
-          ]
-        }
-      });
-      break;
-
-    case 'ad_bot':
-      userStates[userId] = 'awaiting_bot_forward';
-      bot.editMessageText(`🔗 FORWARD a message from the bot you want to promote\n\n` +
-        `1️⃣ Go to the bot you want to promote\n` +
-        `2️⃣ Select any message\n` +
-        `3️⃣ Forward it to this bot\n\n` +
-        `👇 Do it now`, {
-        chat_id: chatId,
-        message_id: query.message?.message_id,
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '🔙 Back', callback_data: 'advertise' }]
-          ]
-        }
-      });
+      if (availableSiteTasks.length === 0) {
+        bot.editMessageText(`❌ বর্তমানে কোন সাইট ভিজিট টাস্ক নেই!\n\n` +
+          `🔄 পরে আবার চেক করুন অথবা নিজের সাইটের জন্য বিজ্ঞাপন তৈরি করুন।`, {
+          chat_id: chatId,
+          message_id: query.message?.message_id,
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '➕ বিজ্ঞাপন তৈরি করুন', callback_data: 'ad_site_visits' }],
+              [{ text: '🔙 Back', callback_data: 'back_to_main' }]
+            ]
+          }
+        });
+      } else {
+        const task = availableSiteTasks[0] as any;
+        const siteTaskMessage = `🌐 সাইট ভিজিট টাস্ক\n\n` +
+          `📝 বিবরণ: ${task.description}\n\n` +
+          `🔗 ওয়েবসাইট: ${task.link}\n\n` +
+          `💰 পুরস্কার: ${task.cpc.toFixed(6)} ${CONFIG.CURRENCY}\n\n` +
+          `📋 নির্দেশনা:\n` +
+          `1. 🌐 Open Link বাটন চাপুন\n` +
+          `2. ওয়েবসাইটে কমপক্ষে 30 সেকেন্ড থাকুন\n` +
+          `3. সাইটটি ব্রাউজ করুন\n` +
+          `4. টাস্ক সম্পন্ন হলে পুরস্কার পাবেন`;
+        
+        bot.editMessageText(siteTaskMessage, {
+          chat_id: chatId,
+          message_id: query.message?.message_id,
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '⏭️ Skip', callback_data: 'skip_task' },
+                { text: '🌐 Open Link 🌐', url: task.link, callback_data: `complete_task_${task.id}` }
+              ],
+              [{ text: '✅ টাস্ক শেষ', callback_data: `complete_task_${task.id}` }],
+              [{ text: '🔙 Back', callback_data: 'back_to_main' }]
+            ]
+          }
+        });
+      }
       break;
 
     case 'info':
-      const infoMessage = `📊 Your Profile\n\n` +
-        `👤 Name: ${users[userId].firstName}\n` +
+      const joinDate = new Date(users[userId].joinedAt);
+      const referralLink = generateReferralLink(userId);
+      const infoMessage = `📊 আপনার প্রোফাইল\n\n` +
+        `👤 নাম: ${users[userId].firstName}\n` +
         `🆔 ID: ${userId}\n` +
-        `💰 Balance: ${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}\n` +
-        `👥 Referrals: ${users[userId].referrals}\n` +
-        `📈 Total Earned: ${users[userId].totalEarned.toFixed(4)} ${CONFIG.CURRENCY}\n` +
-        `✅ Tasks Completed: ${users[userId].tasksCompleted}\n` +
-        `📅 Joined: ${new Date(users[userId].joinedAt).toLocaleDateString()}`;
+        `👥 ইউজারনেম: @${users[userId].username || 'না'}\n` +
+        `💰 ব্যালেন্স: ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+        `👥 রেফারেল: ${users[userId].referrals}\n` +
+        `📈 মোট আয়: ${users[userId].totalEarned.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+        `✅ সম্পন্ন টাস্ক: ${users[userId].tasksCompleted}\n` +
+        `📊 তৈরি বিজ্ঞাপন: ${users[userId].adsCreated}\n` +
+        `📅 যোগদান: ${joinDate.toLocaleDateString('bn-BD')}\n\n` +
+        `🔗 আপনার রেফারেল লিংক:\n${referralLink}`;
+      
       bot.editMessageText(infoMessage, {
         chat_id: chatId,
         message_id: query.message?.message_id,
         reply_markup: {
           inline_keyboard: [
+            [
+              { text: '📤 Share Link', callback_data: 'share_referral' },
+              { text: '📊 Stats', callback_data: 'user_detailed_stats' }
+            ],
             [{ text: '🔙 Back', callback_data: 'back_to_main' }]
           ]
         }
@@ -726,16 +610,16 @@ bot.on('callback_query', async (query) => {
       break;
 
     case 'back_to_main':
-      const welcomeMessage = `🎉 Welcome ${users[userId].firstName}!\n\n` +
-        `💰 Balance: ${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}\n` +
-        `👥 Referrals: ${users[userId].referrals}\n\n` +
-        `Earn by completing simple tasks:\n\n` +
-        `📱 Visit Sites - Earn by clicking links\n` +
-        `👥 Join Channels - Earn by joining chats\n` +
-        `🤖 Join Bots - Earn by talking to bots\n` +
-        `😄 More - TG Post Views, Twitter Raids\n\n` +
-        `You can also create your own ads with /advertise\n\n` +
-        `Use the /help command or read @ClickBeeFAQ for more info`;
+      const welcomeMessage = `🎉 স্বাগতম ${users[userId].firstName}!\n\n` +
+        `💰 ব্যালেন্স: ${users[userId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+        `👥 রেফারেল: ${users[userId].referrals}\n` +
+        `🎯 কমপ্লিট টাস্ক: ${users[userId].tasksCompleted}\n\n` +
+        `🚀 সহজ টাস্ক করে টাকা আয় করুন:\n\n` +
+        `📱 Visit Sites - লিংক ক্লিক করে আয় করুন\n` +
+        `👥 Join Channels - চ্যানেল জয়েন করে আয় করুন\n` +
+        `🤖 Join Bots - বট জয়েন করে আয় করুন\n` +
+        `😄 More - আরো টাস্ক এবং সুবিধা\n\n` +
+        `📊 নিজের বিজ্ঞাপন তৈরি করুন /advertise দিয়ে`;
 
       bot.editMessageText(welcomeMessage, {
         chat_id: chatId,
@@ -744,75 +628,45 @@ bot.on('callback_query', async (query) => {
       });
       break;
 
-    case 'open_link':
-      // Simulate task completion and reward
-      const reward = Math.random() * 0.01 + 0.001;
-      users[userId].balance += reward;
-      users[userId].totalEarned += reward;
-      users[userId].tasksCompleted += 1;
-      saveData();
-      
-      bot.answerCallbackQuery(query.id, { 
-        text: `✅ Task completed! You earned ${reward.toFixed(4)} ${CONFIG.CURRENCY}`,
-        show_alert: true 
-      });
-      break;
-
-    case 'skip_task':
-      bot.answerCallbackQuery(query.id, { text: 'Task skipped' });
-      break;
-
     // Admin callbacks
-    case 'admin_users':
-      if (userId !== ADMIN_ID) return;
-      const totalUsers = Object.keys(users).length;
-      const todayUsers = Object.values(users).filter((u: any) => {
-        const joinDate = new Date(u.joinedAt);
-        const today = new Date();
-        return joinDate.toDateString() === today.toDateString();
-      }).length;
-      
-      bot.editMessageText(`👥 User Statistics\n\n` +
-        `📊 Total Users: ${totalUsers}\n` +
-        `🆕 Today's New Users: ${todayUsers}\n` +
-        `💰 Total Balance: ${Object.values(users).reduce((sum: number, u: any) => sum + u.balance, 0).toFixed(4)} ${CONFIG.CURRENCY}`, {
-        chat_id: chatId,
-        message_id: query.message?.message_id,
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '🔙 Back', callback_data: 'admin_back' }]
-          ]
-        }
-      });
-      break;
-
     case 'admin_deposits':
-      if (userId !== ADMIN_ID) return;
+      if (userId !== ADMIN_ID) return bot.answerCallbackQuery(query.id, { text: 'অ্যাক্সেস নেই' });
+      
       const pendingDeposits = Object.values(deposits).filter((d: any) => d.status === 'pending');
       if (pendingDeposits.length === 0) {
-        bot.editMessageText(`💳 No pending deposits`, {
+        bot.editMessageText(`💳 কোন পেন্ডিং ডিপোজিট নেই`, {
           chat_id: chatId,
           message_id: query.message?.message_id,
           reply_markup: {
             inline_keyboard: [
+              [{ text: '🔄 Refresh', callback_data: 'admin_deposits' }],
               [{ text: '🔙 Back', callback_data: 'admin_back' }]
             ]
           }
         });
       } else {
         const deposit = pendingDeposits[0] as any;
-        bot.editMessageText(`💳 Pending Deposit\n\n` +
-          `👤 User: ${users[deposit.userId]?.firstName || 'Unknown'}\n` +
+        const user = users[deposit.userId];
+        bot.editMessageText(`💳 PENDING DEPOSIT REQUEST\n\n` +
+          `👤 User: ${user?.firstName || 'Unknown'} (@${user?.username || 'no username'})\n` +
+          `🆔 User ID: ${deposit.userId}\n` +
           `💰 Amount: ${deposit.amount} ${CONFIG.CURRENCY}\n` +
           `💳 Method: ${deposit.method}\n` +
-          `📅 Date: ${new Date(deposit.createdAt).toLocaleString()}`, {
+          `📅 Date: ${new Date(deposit.createdAt).toLocaleString('bn-BD')}\n` +
+          `🆔 Deposit ID: ${deposit.id}\n` +
+          `📸 Proof: ${deposit.proof}\n\n` +
+          `Remaining: ${pendingDeposits.length} deposits`, {
           chat_id: chatId,
           message_id: query.message?.message_id,
           reply_markup: {
             inline_keyboard: [
               [
-                { text: '✅ Approve', callback_data: `approve_deposit_${deposit.id}` },
-                { text: '❌ Reject', callback_data: `reject_deposit_${deposit.id}` }
+                { text: '✅ APPROVE', callback_data: `approve_deposit_${deposit.id}` },
+                { text: '❌ REJECT', callback_data: `reject_deposit_${deposit.id}` }
+              ],
+              [
+                { text: '👤 User Info', callback_data: `user_info_${deposit.userId}` },
+                { text: '📝 Custom Amount', callback_data: `custom_deposit_${deposit.id}` }
               ],
               [{ text: '🔙 Back', callback_data: 'admin_back' }]
             ]
@@ -822,33 +676,44 @@ bot.on('callback_query', async (query) => {
       break;
 
     case 'admin_withdrawals':
-      if (userId !== ADMIN_ID) return;
+      if (userId !== ADMIN_ID) return bot.answerCallbackQuery(query.id, { text: 'অ্যাক্সেস নেই' });
+      
       const pendingWithdrawals = Object.values(withdrawals).filter((w: any) => w.status === 'pending');
       if (pendingWithdrawals.length === 0) {
-        bot.editMessageText(`🏧 No pending withdrawals`, {
+        bot.editMessageText(`🏧 কোন পেন্ডিং উত্তোলন নেই`, {
           chat_id: chatId,
           message_id: query.message?.message_id,
           reply_markup: {
             inline_keyboard: [
+              [{ text: '🔄 Refresh', callback_data: 'admin_withdrawals' }],
               [{ text: '🔙 Back', callback_data: 'admin_back' }]
             ]
           }
         });
       } else {
         const withdrawal = pendingWithdrawals[0] as any;
-        bot.editMessageText(`🏧 Pending Withdrawal\n\n` +
-          `👤 User: ${users[withdrawal.userId]?.firstName || 'Unknown'}\n` +
+        const user = users[withdrawal.userId];
+        bot.editMessageText(`🏧 PENDING WITHDRAWAL REQUEST\n\n` +
+          `👤 User: ${user?.firstName || 'Unknown'} (@${user?.username || 'no username'})\n` +
+          `🆔 User ID: ${withdrawal.userId}\n` +
           `💰 Amount: ${withdrawal.amount} ${CONFIG.CURRENCY}\n` +
           `💳 Method: ${withdrawal.method}\n` +
           `🆔 Payment ID: ${withdrawal.paymentId}\n` +
-          `📅 Date: ${new Date(withdrawal.createdAt).toLocaleString()}`, {
+          `📅 Date: ${new Date(withdrawal.createdAt).toLocaleString('bn-BD')}\n` +
+          `🆔 Withdrawal ID: ${withdrawal.id}\n\n` +
+          `💰 User Balance: ${user?.balance.toFixed(6) || '0'} ${CONFIG.CURRENCY}\n` +
+          `Remaining: ${pendingWithdrawals.length} withdrawals`, {
           chat_id: chatId,
           message_id: query.message?.message_id,
           reply_markup: {
             inline_keyboard: [
               [
-                { text: '✅ Approve', callback_data: `approve_withdrawal_${withdrawal.id}` },
-                { text: '❌ Reject', callback_data: `reject_withdrawal_${withdrawal.id}` }
+                { text: '✅ APPROVE', callback_data: `approve_withdrawal_${withdrawal.id}` },
+                { text: '❌ REJECT', callback_data: `reject_withdrawal_${withdrawal.id}` }
+              ],
+              [
+                { text: '👤 User Info', callback_data: `user_info_${withdrawal.userId}` },
+                { text: '📋 Copy Payment ID', callback_data: `copy_payment_id_${withdrawal.id}` }
               ],
               [{ text: '🔙 Back', callback_data: 'admin_back' }]
             ]
@@ -863,6 +728,69 @@ bot.on('callback_query', async (query) => {
       break;
   }
 
+  // Handle quick deposit amount selection
+  if (data.startsWith('set_deposit_amount_')) {
+    const parts = data.split('_');
+    const method = parts[3]; // binance or payeer
+    const amount = parseFloat(parts[4]);
+    
+    if (amount >= CONFIG.MIN_DEPOSIT && amount <= CONFIG.MAX_DEPOSIT) {
+      processDepositAmount(chatId, userId, amount, method, query.message?.message_id);
+    }
+  }
+
+  // Handle quick withdraw amount selection
+  if (data.startsWith('set_withdraw_amount_')) {
+    const parts = data.split('_');
+    const method = parts[3]; // binance or payeer
+    const amount = parseFloat(parts[4]);
+    
+    if (amount >= CONFIG.MIN_WITHDRAW && amount <= Math.min(CONFIG.MAX_WITHDRAW, users[userId].balance)) {
+      processWithdrawAmount(chatId, userId, amount, method, query.message?.message_id);
+    }
+  }
+
+  // Handle task completion
+  if (data.startsWith('complete_task_')) {
+    const taskId = data.split('_')[2];
+    const task = advertisements[taskId];
+    
+    if (task && task.status === 'active' && !users[userId].completedTasks.includes(taskId)) {
+      // Add reward
+      users[userId].balance += task.cpc;
+      users[userId].totalEarned += task.cpc;
+      users[userId].tasksCompleted += 1;
+      users[userId].completedTasks.push(taskId);
+      
+      // Update ad stats
+      advertisements[taskId].totalClicks += 1;
+      advertisements[taskId].spentToday += task.cpc;
+      
+      // Give referral bonus to referrer
+      if (users[userId].referrerId && users[users[userId].referrerId]) {
+        const referralBonus = task.cpc * 0.20; // 20% referral bonus
+        users[users[userId].referrerId].balance += referralBonus;
+        users[users[userId].referrerId].totalEarned += referralBonus;
+        
+        bot.sendMessage(users[userId].referrerId, 
+          `🎉 রেফারেল বোনাস!\n${users[userId].firstName} একটি টাস্ক সম্পন্ন করেছে।\nআপনি ${referralBonus.toFixed(6)} ${CONFIG.CURRENCY} বোনাস পেয়েছেন!`);
+      }
+      
+      saveData();
+      
+      bot.answerCallbackQuery(query.id, { 
+        text: `✅ টাস্ক সম্পন্ন! আপনি ${task.cpc.toFixed(6)} ${CONFIG.CURRENCY} পেয়েছেন!`,
+        show_alert: true 
+      });
+
+      // Notify advertiser
+      bot.sendMessage(task.userId, 
+        `📈 আপনার বিজ্ঞাপনে নতুন ক্লিক!\n` +
+        `💰 খরচ: ${task.cpc.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+        `📊 মোট ক্লিক: ${advertisements[taskId].totalClicks}`);
+    }
+  }
+
   // Handle admin approval/rejection
   if (data.startsWith('approve_deposit_') || data.startsWith('reject_deposit_')) {
     if (userId !== ADMIN_ID) return;
@@ -872,16 +800,33 @@ bot.on('callback_query', async (query) => {
     if (deposits[depositId]) {
       if (action === 'approve') {
         deposits[depositId].status = 'approved';
+        deposits[depositId].approvedAt = new Date().toISOString();
         users[deposits[depositId].userId].balance += deposits[depositId].amount;
+        users[deposits[depositId].userId].totalDeposited += deposits[depositId].amount;
+        
         bot.sendMessage(deposits[depositId].userId, 
-          `✅ Your deposit of ${deposits[depositId].amount} ${CONFIG.CURRENCY} has been approved!`);
+          `✅ আপনার ${deposits[depositId].amount} ${CONFIG.CURRENCY} জমা অনুমোদিত হয়েছে!\n\n` +
+          `💰 নতুন ব্যালেন্স: ${users[deposits[depositId].userId].balance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+          `📅 সময়: ${new Date().toLocaleString('bn-BD')}\n\n` +
+          `🎉 ধন্যবাদ! এখন আপনি টাস্ক করা শুরু করতে পারেন।`);
       } else {
         deposits[depositId].status = 'rejected';
+        deposits[depositId].rejectedAt = new Date().toISOString();
+        
         bot.sendMessage(deposits[depositId].userId, 
-          `❌ Your deposit of ${deposits[depositId].amount} ${CONFIG.CURRENCY} has been rejected.`);
+          `❌ আপনার ${deposits[depositId].amount} ${CONFIG.CURRENCY} জমা প্রত্যাখ্যান করা হয়েছে।\n\n` +
+          `📞 সাহায্যের জন্য সাপোর্টে যোগাযোগ করুন: @Owner_Anas1`);
       }
       saveData();
       bot.answerCallbackQuery(query.id, { text: `Deposit ${action}d successfully` });
+      
+      // Show next pending deposit
+      setTimeout(() => {
+        bot.sendMessage(chatId, 'Loading next deposit...').then(() => {
+          // Trigger next deposit check
+          bot.emit('callback_query', { ...query, data: 'admin_deposits' });
+        });
+      }, 1000);
     }
   }
 
@@ -893,19 +838,114 @@ bot.on('callback_query', async (query) => {
     if (withdrawals[withdrawalId]) {
       if (action === 'approve') {
         withdrawals[withdrawalId].status = 'approved';
+        withdrawals[withdrawalId].approvedAt = new Date().toISOString();
+        users[withdrawals[withdrawalId].userId].totalWithdrawn += withdrawals[withdrawalId].amount;
+        
         bot.sendMessage(withdrawals[withdrawalId].userId, 
-          `✅ Your withdrawal of ${withdrawals[withdrawalId].amount} ${CONFIG.CURRENCY} has been approved!`);
+          `✅ আপনার ${withdrawals[withdrawalId].amount} ${CONFIG.CURRENCY} উত্তোলন অনুমোদিত হয়েছে!\n\n` +
+          `💳 পেমেন্ট মেথড: ${withdrawals[withdrawalId].method}\n` +
+          `🆔 পেমেন্ট ID: ${withdrawals[withdrawalId].paymentId}\n` +
+          `📅 সময়: ${new Date().toLocaleString('bn-BD')}\n\n` +
+          `💰 পেমেন্ট 24 ঘন্টার মধ্যে পাঠানো হবে।`);
       } else {
         withdrawals[withdrawalId].status = 'rejected';
+        withdrawals[withdrawalId].rejectedAt = new Date().toISOString();
         users[withdrawals[withdrawalId].userId].balance += withdrawals[withdrawalId].amount; // Refund
+        
         bot.sendMessage(withdrawals[withdrawalId].userId, 
-          `❌ Your withdrawal of ${withdrawals[withdrawalId].amount} ${CONFIG.CURRENCY} has been rejected. Amount refunded.`);
+          `❌ আপনার ${withdrawals[withdrawalId].amount} ${CONFIG.CURRENCY} উত্তোলন প্রত্যাখ্যান করা হয়েছে।\n\n` +
+          `💰 টাকা আপনার অ্যাকাউন্টে ফেরত দেওয়া হয়েছে।\n` +
+          `📞 সাহায্যের জন্য সাপোর্টে যোগাযোগ করুন: @Owner_Anas1`);
       }
       saveData();
       bot.answerCallbackQuery(query.id, { text: `Withdrawal ${action}d successfully` });
+      
+      // Show next pending withdrawal
+      setTimeout(() => {
+        bot.sendMessage(chatId, 'Loading next withdrawal...').then(() => {
+          // Trigger next withdrawal check
+          bot.emit('callback_query', { ...query, data: 'admin_withdrawals' });
+        });
+      }, 1000);
     }
   }
 });
+
+// Function to process deposit amount
+const processDepositAmount = (chatId: number, userId: number, amount: number, method: string, messageId?: number) => {
+  const methodName = method === 'binance' ? 'Binance Pay' : 'Payeer';
+  const paymentId = method === 'binance' ? CONFIG.BINANCE_PAY_ID : CONFIG.PAYEER_ID;
+  
+  userStates[userId] = `awaiting_deposit_proof_${method}_${amount}`;
+  
+  const message = `💳 ${methodName} জমা - ${amount} ${CONFIG.CURRENCY}\n\n` +
+    `📋 পেমেন্ট তথ্য:\n` +
+    `💰 পরিমাণ: ${amount} ${CONFIG.CURRENCY}\n` +
+    `🆔 ${methodName} ID: \`${paymentId}\`\n\n` +
+    `📱 ধাপসমূহ:\n` +
+    `1️⃣ উপরের ID-তে ${amount} ${CONFIG.CURRENCY} পাঠান\n` +
+    `2️⃣ পেমেন্টের স্ক্রিনশট নিন\n` +
+    `3️⃣ স্ক্রিনশট এখানে পাঠান\n\n` +
+    `⚠️ পরিমাণ হুবহু মিলতে হবে!\n` +
+    `🕐 সাধারণত 5-10 মিনিটে অনুমোদন হয়`;
+
+  if (messageId) {
+    bot.editMessageText(message, {
+      chat_id: chatId,
+      message_id: messageId,
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: `📋 Copy ${methodName} ID`, callback_data: `copy_${method}_id` }],
+          [{ text: '❌ Cancel', callback_data: 'deposit' }]
+        ]
+      }
+    });
+  } else {
+    bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: `📋 Copy ${methodName} ID`, callback_data: `copy_${method}_id` }],
+          [{ text: '❌ Cancel', callback_data: 'deposit' }]
+        ]
+      }
+    });
+  }
+};
+
+// Function to process withdraw amount
+const processWithdrawAmount = (chatId: number, userId: number, amount: number, method: string, messageId?: number) => {
+  const methodName = method === 'binance' ? 'Binance Pay' : 'Payeer';
+  
+  userStates[userId] = `awaiting_withdraw_id_${method}_${amount}`;
+  
+  const message = `🏧 ${methodName} উত্তোলন - ${amount} ${CONFIG.CURRENCY}\n\n` +
+    `💳 আপনার ${methodName} ID লিখুন যেখানে টাকা পেতে চান:\n\n` +
+    `💡 উদাহরণ:\n` +
+    `${methodName === 'Binance Pay' ? 'Binance Pay এর জন্য: 123456789' : 'Payeer এর জন্য: P1234567890'}\n\n` +
+    `⚠️ সঠিক ID দিন, ভুল ID দিলে টাকা হারিয়ে যেতে পারে!`;
+
+  if (messageId) {
+    bot.editMessageText(message, {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '❌ Cancel', callback_data: 'withdraw' }]
+        ]
+      }
+    });
+  } else {
+    bot.sendMessage(chatId, message, {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '❌ Cancel', callback_data: 'withdraw' }]
+        ]
+      }
+    });
+  }
+};
 
 // Handle text messages for states
 bot.on('message', (msg) => {
@@ -921,55 +961,27 @@ bot.on('message', (msg) => {
   // Handle deposit amount input
   if (userState === 'awaiting_deposit_amount_binance' || userState === 'awaiting_deposit_amount_payeer') {
     const amount = parseFloat(text);
-    const method = userState.includes('binance') ? 'Binance Pay' : 'Payeer';
-    const paymentId = userState.includes('binance') ? CONFIG.BINANCE_PAY_ID : CONFIG.PAYEER_ID;
+    const method = userState.includes('binance') ? 'binance' : 'payeer';
     
     if (isNaN(amount) || amount < CONFIG.MIN_DEPOSIT || amount > CONFIG.MAX_DEPOSIT) {
       return bot.sendMessage(chatId, 
-        `❌ Invalid amount. Please enter a number between ${CONFIG.MIN_DEPOSIT} and ${CONFIG.MAX_DEPOSIT} ${CONFIG.CURRENCY}`);
+        `❌ ভুল পরিমাণ। অনুগ্রহ করে ${CONFIG.MIN_DEPOSIT} থেকে ${CONFIG.MAX_DEPOSIT} ${CONFIG.CURRENCY} এর মধ্যে একটি সংখ্যা লিখুন।`);
     }
 
-    userStates[userId] = `awaiting_deposit_proof_${method.toLowerCase().replace(' ', '_')}_${amount}`;
-    
-    bot.sendMessage(chatId, 
-      `💳 ${method} Deposit - ${amount} ${CONFIG.CURRENCY}\n\n` +
-      `📋 Payment Details:\n` +
-      `💰 Amount: ${amount} ${CONFIG.CURRENCY}\n` +
-      `🆔 ${method} ID: \`${paymentId}\`\n\n` +
-      `👆 Click to copy the ID above ☝️\n\n` +
-      `📱 Steps:\n` +
-      `1. Send ${amount} ${CONFIG.CURRENCY} to the ID above\n` +
-      `2. Take a screenshot of the payment\n` +
-      `3. Send the screenshot here as proof\n\n` +
-      `⚠️ Make sure the amount matches exactly!`, 
-      { 
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '📋 Copy ID', callback_data: `copy_${method.toLowerCase().replace(' ', '_')}_id` }],
-            [{ text: '❌ Cancel', callback_data: 'deposit' }]
-          ]
-        }
-      });
+    processDepositAmount(chatId, userId, amount, method);
   }
 
   // Handle withdrawal amount input
   else if (userState === 'awaiting_withdraw_amount_binance' || userState === 'awaiting_withdraw_amount_payeer') {
     const amount = parseFloat(text);
-    const method = userState.includes('binance') ? 'Binance Pay' : 'Payeer';
+    const method = userState.includes('binance') ? 'binance' : 'payeer';
     
     if (isNaN(amount) || amount < CONFIG.MIN_WITHDRAW || amount > Math.min(CONFIG.MAX_WITHDRAW, users[userId].balance)) {
       return bot.sendMessage(chatId, 
-        `❌ Invalid amount. Please enter a number between ${CONFIG.MIN_WITHDRAW} and ${Math.min(CONFIG.MAX_WITHDRAW, users[userId].balance).toFixed(4)} ${CONFIG.CURRENCY}`);
+        `❌ ভুল পরিমাণ। অনুগ্রহ করে ${CONFIG.MIN_WITHDRAW} থেকে ${Math.min(CONFIG.MAX_WITHDRAW, users[userId].balance).toFixed(6)} ${CONFIG.CURRENCY} এর মধ্যে একটি সংখ্যা লিখুন।`);
     }
 
-    userStates[userId] = `awaiting_withdraw_id_${method.toLowerCase().replace(' ', '_')}_${amount}`;
-    
-    bot.sendMessage(chatId, 
-      `🏧 ${method} Withdrawal - ${amount} ${CONFIG.CURRENCY}\n\n` +
-      `💳 Enter your ${method} ID where you want to receive the payment:\n\n` +
-      `💡 Example:\n` +
-      `${method === 'Binance Pay' ? 'For Binance Pay: 123456789' : 'For Payeer: P1234567890'}`);
+    processWithdrawAmount(chatId, userId, amount, method);
   }
 
   // Handle withdrawal ID input
@@ -980,7 +992,7 @@ bot.on('message', (msg) => {
     const paymentId = text.trim();
     
     if (!paymentId) {
-      return bot.sendMessage(chatId, '❌ Please enter a valid payment ID');
+      return bot.sendMessage(chatId, '❌ অনুগ্রহ করে একটি সঠিক পেমেন্ট ID লিখুন');
     }
 
     const withdrawalId = Date.now().toString();
@@ -999,31 +1011,50 @@ bot.on('message', (msg) => {
     saveData();
 
     bot.sendMessage(chatId, 
-      `✅ Withdrawal request submitted!\n\n` +
-      `💰 Amount: ${amount} ${CONFIG.CURRENCY}\n` +
-      `💳 Method: ${method}\n` +
-      `🆔 Payment ID: ${paymentId}\n` +
-      `🔗 Request ID: ${withdrawalId}\n\n` +
-      `⏳ Please wait for admin approval. You will be notified when processed.`);
-    
-    // Notify admin
-    bot.sendMessage(ADMIN_ID, 
-      `🏧 New Withdrawal Request\n\n` +
-      `👤 User: ${users[userId].firstName} (${userId})\n` +
-      `💰 Amount: ${amount} ${CONFIG.CURRENCY}\n` +
-      `💳 Method: ${method}\n` +
-      `🆔 Payment ID: ${paymentId}\n` +
-      `🔗 Request ID: ${withdrawalId}`,
+      `✅ উত্তোলনের আবেদন জমা দেওয়া হয়েছে!\n\n` +
+      `💰 পরিমাণ: ${amount} ${CONFIG.CURRENCY}\n` +
+      `💳 পদ্ধতি: ${method}\n` +
+      `🆔 পেমেন্ট ID: ${paymentId}\n` +
+      `🔗 আবেদন ID: ${withdrawalId}\n\n` +
+      `⏳ অনুমোদনের জন্য অপেক্ষা করুন। অনুমোদন হলে জানানো হবে।\n` +
+      `🕐 সাধারণত 2-6 ঘন্টা সময় লাগে।`,
       {
         reply_markup: {
           inline_keyboard: [
-            [
-              { text: '✅ Approve', callback_data: `approve_withdrawal_${withdrawalId}` },
-              { text: '❌ Reject', callback_data: `reject_withdrawal_${withdrawalId}` }
-            ]
+            [{ text: '💰 Balance', callback_data: 'balance' }],
+            [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
           ]
         }
       });
+    
+    // Notify admin with detailed info
+    const user = users[userId];
+    const adminNotification = `🏧 NEW WITHDRAWAL REQUEST\n\n` +
+      `👤 User: ${user.firstName} (@${user.username || 'no username'})\n` +
+      `🆔 User ID: ${userId}\n` +
+      `💰 Amount: ${amount} ${CONFIG.CURRENCY}\n` +
+      `💳 Method: ${method}\n` +
+      `🆔 Payment ID: ${paymentId}\n` +
+      `🔗 Request ID: ${withdrawalId}\n` +
+      `💰 User Balance After: ${user.balance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+      `📈 User Total Earned: ${user.totalEarned.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+      `✅ User Tasks Completed: ${user.tasksCompleted}\n` +
+      `📅 Request Time: ${new Date().toLocaleString('bn-BD')}`;
+    
+    bot.sendMessage(ADMIN_ID, adminNotification, {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '✅ APPROVE', callback_data: `approve_withdrawal_${withdrawalId}` },
+            { text: '❌ REJECT', callback_data: `reject_withdrawal_${withdrawalId}` }
+          ],
+          [
+            { text: '👤 User Info', callback_data: `user_info_${userId}` },
+            { text: '📋 Copy Payment ID', callback_data: `copy_payment_id_${withdrawalId}` }
+          ]
+        ]
+      }
+    });
   }
 
   // Handle deposit proof upload
@@ -1047,173 +1078,48 @@ bot.on('message', (msg) => {
     saveData();
 
     bot.sendMessage(chatId, 
-      `✅ Deposit request submitted!\n\n` +
-      `💰 Amount: ${amount} ${CONFIG.CURRENCY}\n` +
-      `💳 Method: ${method}\n` +
-      `🔗 Request ID: ${depositId}\n\n` +
-      `⏳ Please wait for admin approval. You will be notified when processed.`);
+      `✅ জমার আবেদন জমা দেওয়া হয়েছে!\n\n` +
+      `💰 পরিমাণ: ${amount} ${CONFIG.CURRENCY}\n` +
+      `💳 পদ্ধতি: ${method}\n` +
+      `🔗 আবেদন ID: ${depositId}\n\n` +
+      `⏳ অনুমোদনের জন্য অপেক্ষা করুন। অনুমোদন হলে জানানো হবে।\n` +
+      `🕐 সাধারণত 5-30 মিনিট সময় লাগে।`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '💰 Balance', callback_data: 'balance' }],
+            [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+          ]
+        }
+      });
     
-    // Notify admin
-    bot.sendMessage(ADMIN_ID, 
-      `💳 New Deposit Request\n\n` +
-      `👤 User: ${users[userId].firstName} (${userId})\n` +
+    // Notify admin with detailed info
+    const user = users[userId];
+    const adminNotification = `💳 NEW DEPOSIT REQUEST\n\n` +
+      `👤 User: ${user.firstName} (@${user.username || 'no username'})\n` +
+      `🆔 User ID: ${userId}\n` +
       `💰 Amount: ${amount} ${CONFIG.CURRENCY}\n` +
       `💳 Method: ${method}\n` +
       `🔗 Request ID: ${depositId}\n` +
-      `📸 Proof: ${msg.photo ? 'Screenshot provided' : 'Text proof provided'}`,
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '✅ Approve', callback_data: `approve_deposit_${depositId}` },
-              { text: '❌ Reject', callback_data: `reject_deposit_${depositId}` }
-            ]
+      `📸 Proof: ${msg.photo ? 'Screenshot provided' : 'Text proof provided'}\n` +
+      `💰 User Current Balance: ${user.balance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+      `📈 User Total Earned: ${user.totalEarned.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+      `📅 Request Time: ${new Date().toLocaleString('bn-BD')}`;
+    
+    bot.sendMessage(ADMIN_ID, adminNotification, {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '✅ APPROVE', callback_data: `approve_deposit_${depositId}` },
+            { text: '❌ REJECT', callback_data: `reject_deposit_${depositId}` }
+          ],
+          [
+            { text: '👤 User Info', callback_data: `user_info_${userId}` },
+            { text: '📝 Custom Amount', callback_data: `custom_deposit_${depositId}` }
           ]
-        }
-      });
-  }
-
-  // Handle advertisement creation
-  else if (userState === 'awaiting_channel_link' || userState === 'awaiting_group_link') {
-    if (text.includes('t.me/') || text.startsWith('@')) {
-      userStates[userId] = `awaiting_ad_description_${userState === 'awaiting_channel_link' ? 'channel' : 'group'}_${encodeURIComponent(text)}`;
-      
-      bot.sendMessage(chatId, 
-        `✏️ Create an engaging description for your AD:\n\n` +
-        `• This will be the first thing users see and it should grab their attention and make them want to click on your link or check out your product/service.\n\n` +
-        `ℹ️ You can use formatting options like *bold*, _italic_, and more to make your description stand out.\n\n` +
-        `👇 Send your advertisement description now:`);
-    } else {
-      bot.sendMessage(chatId, '❌ Please send a valid Telegram link (starting with https://t.me/) or username (starting with @)');
-    }
-  }
-
-  // Handle advertisement description
-  else if (userState && userState.startsWith('awaiting_ad_description_')) {
-    const parts = userState.split('_');
-    const type = parts[3];
-    const link = decodeURIComponent(parts[4]);
-    const description = text;
-    
-    userStates[userId] = `awaiting_ad_cpc_${type}_${encodeURIComponent(link)}_${encodeURIComponent(description)}`;
-    
-    bot.sendMessage(chatId, 
-      `📊 Preview of your AD:\n\n${description}\n\n` +
-      `💰 How much do you want to pay for each click?\n\n` +
-      `ℹ️ This is the amount you'll pay for each person who clicks on your ad. Paying more will get your ad displayed in front of others.\n\n` +
-      `To target only Telegram Premium users, use /premium_users_only\n\n` +
-      `🔻 Min: ${CONFIG.MIN_CPC.toFixed(4)} ${CONFIG.CURRENCY}\n\n` +
-      `👇 Enter your desired CPC in ${CONFIG.CURRENCY}:`,
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: `${CONFIG.MIN_CPC.toFixed(4)} ${CONFIG.CURRENCY} (Slow)`, callback_data: `set_cpc_${CONFIG.MIN_CPC}` },
-              { text: `${(CONFIG.MIN_CPC * 5).toFixed(4)} ${CONFIG.CURRENCY} (Fast)`, callback_data: `set_cpc_${CONFIG.MIN_CPC * 5}` },
-              { text: `${CONFIG.MAX_CPC.toFixed(4)} ${CONFIG.CURRENCY}`, callback_data: `set_cpc_${CONFIG.MAX_CPC}` }
-            ]
-          ]
-        }
-      });
-  }
-
-  // Handle CPC input
-  else if (userState && userState.startsWith('awaiting_ad_cpc_')) {
-    const cpc = parseFloat(text);
-    if (isNaN(cpc) || cpc < CONFIG.MIN_CPC || cpc > CONFIG.MAX_CPC) {
-      return bot.sendMessage(chatId, 
-        `❌ Invalid CPC. Please enter a number between ${CONFIG.MIN_CPC} and ${CONFIG.MAX_CPC} ${CONFIG.CURRENCY}`);
-    }
-
-    const parts = userState.split('_');
-    const type = parts[3];
-    const link = decodeURIComponent(parts[4]);
-    const description = decodeURIComponent(parts[5]);
-    
-    userStates[userId] = `awaiting_ad_budget_${type}_${encodeURIComponent(link)}_${encodeURIComponent(description)}_${cpc}`;
-    
-    bot.sendMessage(chatId, 
-      `💰 What is your daily budget for this ad campaign?\n\n` +
-      `ℹ️ This will determine the maximum amount you are willing to spend per day on this ad campaign. Your ad will be paused for the day if the daily budget is exceeded.\n\n` +
-      `💰 Available Balance: ${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}\n\n` +
-      `👇 Enter your desired daily budget in ${CONFIG.CURRENCY}:`);
-  }
-
-  // Handle daily budget input
-  else if (userState && userState.startsWith('awaiting_ad_budget_')) {
-    const budget = parseFloat(text);
-    if (isNaN(budget) || budget <= 0 || budget > users[userId].balance) {
-      return bot.sendMessage(chatId, 
-        `❌ Invalid budget. Please enter a number between 0.01 and ${users[userId].balance.toFixed(4)} ${CONFIG.CURRENCY}`);
-    }
-
-    const parts = userState.split('_');
-    const type = parts[3];
-    const link = decodeURIComponent(parts[4]);
-    const description = decodeURIComponent(parts[5]);
-    const cpc = parseFloat(parts[6]);
-    
-    const adId = Date.now().toString();
-    advertisements[adId] = {
-      id: adId,
-      userId,
-      type: type === 'channel' ? 'channel_members' : 'group_members',
-      link,
-      description,
-      cpc,
-      dailyBudget: budget,
-      status: 'active',
-      createdAt: new Date().toISOString(),
-      totalClicks: 0,
-      totalSkips: 0,
-      spentToday: 0,
-      lastResetDate: new Date().toDateString()
-    };
-    
-    delete userStates[userId];
-    saveData();
-    
-    bot.sendMessage(chatId, 
-      `✅ Promotion created successfully\n\n` +
-      `🎯 Campaign #${adId.slice(-6)}/\n${users[userId].firstName} - 👥 ${type === 'channel' ? 'Channel' : 'Group'} Members\n\n` +
-      `👁️ Your Advert (User can see this)\n\n` +
-      `ℹ️ ${description}\n\n` +
-      `🔗 Users will be asked to join ${link} and stay for at least 7 days.\n\n` +
-      `🔍 Telegram Premium Users ONLY: disabled\n\n` +
-      `💰 CPC: ${cpc.toFixed(4)} ${CONFIG.CURRENCY}\n` +
-      `💰 Daily Budget: ${budget.toFixed(4)} ${CONFIG.CURRENCY}\n\n` +
-      `ℹ️ Status: ⏸️ Paused after finishing budget\n` +
-      `👆 Total Clicks: 0\n` +
-      `⏭️ Total Skips: 0\n` +
-      `💰 Spent Today: 0.00 ${CONFIG.CURRENCY}`,
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '▶️ Activate', callback_data: `activate_ad_${adId}` },
-              { text: '❌ Delete', callback_data: `delete_ad_${adId}` }
-            ],
-            [
-              { text: '🔺 Increase CPC', callback_data: `increase_cpc_${adId}` },
-              { text: '🎯 Edit Daily Budget', callback_data: `edit_budget_${adId}` }
-            ],
-            [
-              { text: '📝 Edit Description', callback_data: `edit_description_${adId}` },
-              { text: '🌍 Edit Geolocation', callback_data: `edit_geo_${adId}` }
-            ]
-          ]
-        }
-      });
-    
-    // Notify admin
-    bot.sendMessage(ADMIN_ID, 
-      `📢 New Advertisement Created\n\n` +
-      `👤 User: ${users[userId].firstName} (${userId})\n` +
-      `🔗 Link: ${link}\n` +
-      `📝 Type: ${type === 'channel' ? 'Channel' : 'Group'} Members\n` +
-      `💰 CPC: ${cpc.toFixed(4)} ${CONFIG.CURRENCY}\n` +
-      `💰 Daily Budget: ${budget.toFixed(4)} ${CONFIG.CURRENCY}\n` +
-      `🆔 Ad ID: ${adId}`);
+        ]
+      }
+    });
   }
 });
 
@@ -1240,43 +1146,67 @@ bot.on('photo', (msg) => {
       method,
       status: 'pending',
       createdAt: new Date().toISOString(),
-      proof: 'photo_provided'
+      proof: 'photo_provided',
+      photoId: msg.photo[msg.photo.length - 1].file_id
     };
 
     delete userStates[userId];
     saveData();
 
     bot.sendMessage(chatId, 
-      `✅ Deposit request submitted with screenshot!\n\n` +
-      `💰 Amount: ${amount} ${CONFIG.CURRENCY}\n` +
-      `💳 Method: ${method}\n` +
-      `🔗 Request ID: ${depositId}\n\n` +
-      `⏳ Please wait for admin approval. You will be notified when processed.`);
-    
-    // Notify admin
-    bot.sendMessage(ADMIN_ID, 
-      `💳 New Deposit Request\n\n` +
-      `👤 User: ${users[userId].firstName} (${userId})\n` +
-      `💰 Amount: ${amount} ${CONFIG.CURRENCY}\n` +
-      `💳 Method: ${method}\n` +
-      `🔗 Request ID: ${depositId}\n` +
-      `📸 Proof: Screenshot provided`,
+      `✅ স্ক্রিনশট সহ জমার আবেদন জমা দেওয়া হয়েছে!\n\n` +
+      `💰 পরিমাণ: ${amount} ${CONFIG.CURRENCY}\n` +
+      `💳 পদ্ধতি: ${method}\n` +
+      `🔗 আবেদন ID: ${depositId}\n\n` +
+      `⏳ অনুমোদনের জন্য অপেক্ষা করুন। অনুমোদন হলে জানানো হবে।\n` +
+      `🕐 সাধারণত 5-30 মিনিট সময় লাগে।`,
       {
         reply_markup: {
           inline_keyboard: [
-            [
-              { text: '✅ Approve', callback_data: `approve_deposit_${depositId}` },
-              { text: '❌ Reject', callback_data: `reject_deposit_${depositId}` }
-            ]
+            [{ text: '💰 Balance', callback_data: 'balance' }],
+            [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
           ]
         }
       });
+    
+    // Forward photo to admin with details
+    const user = users[userId];
+    const adminNotification = `💳 NEW DEPOSIT WITH SCREENSHOT\n\n` +
+      `👤 User: ${user.firstName} (@${user.username || 'no username'})\n` +
+      `🆔 User ID: ${userId}\n` +
+      `💰 Amount: ${amount} ${CONFIG.CURRENCY}\n` +
+      `💳 Method: ${method}\n` +
+      `🔗 Request ID: ${depositId}\n` +
+      `💰 User Current Balance: ${user.balance.toFixed(6)} ${CONFIG.CURRENCY}\n` +
+      `📅 Request Time: ${new Date().toLocaleString('bn-BD')}`;
+    
+    // First send the photo
+    bot.forwardMessage(ADMIN_ID, chatId, msg.message_id);
+    
+    // Then send the details with buttons
+    bot.sendMessage(ADMIN_ID, adminNotification, {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '✅ APPROVE', callback_data: `approve_deposit_${depositId}` },
+            { text: '❌ REJECT', callback_data: `reject_deposit_${depositId}` }
+          ],
+          [
+            { text: '👤 User Info', callback_data: `user_info_${userId}` },
+            { text: '📝 Custom Amount', callback_data: `custom_deposit_${depositId}` }
+          ]
+        ]
+      }
+    });
   }
 });
 
 // Initialize
 loadData();
 console.log('🤖 AnasCP Bot started successfully!');
-console.log(`Bot: @task_cpbot`);
+console.log(`Bot: ${CONFIG.BOT_USERNAME}`);
 console.log(`Admin ID: ${ADMIN_ID}`);
 console.log(`Required Channels: ${REQUIRED_CHANNELS.join(', ')}`);
+console.log(`Min CPC: ${CONFIG.MIN_CPC} ${CONFIG.CURRENCY}`);
+console.log(`Max CPC: ${CONFIG.MAX_CPC} ${CONFIG.CURRENCY}`);
+console.log(`Referral Bonus: ${CONFIG.REF_BONUS} ${CONFIG.CURRENCY}`);
