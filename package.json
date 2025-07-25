@@ -1,21 +1,5 @@
-{
-  "name": "nodejs-typescript",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.ts",
-  "type": "module",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@types/node-telegram-bot-api": "^0.64.9",
-    "node-fetch": "^3.3.1",
-    "node-telegram-bot-api": "^0.66.0"
-  },
-  "devDependencies": {
-    "@types/node": "^20.10.0",
-    "tsx": "^4.7.1"
-  }
+"scripts": {
+  "build": "tsc",
+  "start": "tsx index.ts",
+  "test": "echo \"Error: no test specified\" && exit 1"
 }
