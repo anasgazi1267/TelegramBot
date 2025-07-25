@@ -17,7 +17,7 @@ const REQUIRED_CHANNELS = [
 
 // Constants
 const CONFIG = {
-  REF_BONUS: 0.02,
+  REF_BONUS: 0.005,
   PLATFORM_FEE: 0.20,
   MIN_CPC: 0.001,
   MAX_CPC: 0.100,

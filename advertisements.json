@@ -8,11 +8,43 @@
     "type": "join_channels",
     "cpc": 0.005,
     "totalBudget": 0.2,
-    "totalSpent": 0.005,
-    "totalClicks": 1,
+    "totalSpent": 0.035,
+    "totalClicks": 7,
     "status": "active",
     "createdAt": "2025-07-24T08:49:47.240Z",
     "dailyBudget": 0.2,
-    "spentToday": 0.005
+    "spentToday": 0.035
+  },
+  "1753353446128": {
+    "id": "1753353446128",
+    "userId": 6939661498,
+    "title": "সবাই কাজ করো",
+    "description": "সবাই কাজ করো",
+    "link": "https://t.me/AnasEarnHunter",
+    "type": "join_channels",
+    "cpc": 0.001,
+    "totalBudget": 0.002,
+    "totalSpent": 0.002,
+    "totalClicks": 2,
+    "status": "completed",
+    "createdAt": "2025-07-24T10:37:26.128Z",
+    "dailyBudget": 0.002,
+    "spentToday": 0.002
+  },
+  "1753366266550": {
+    "id": "1753366266550",
+    "userId": 6918567829,
+    "title": "Hi I'm Bangladeshi also",
+    "description": "আমার চ্যানেল দেখবো এখন একটা সাইট আছে কাজ করবেন না তো ভাই তুমিই না বললে আমি চ্যানেল আই ক্ষুদে গানরাজ ঝুমা",
+    "link": "https://t.me/freeincome808",
+    "type": "site_visits",
+    "cpc": 0.001,
+    "totalBudget": 0.001,
+    "totalSpent": 0.001,
+    "totalClicks": 1,
+    "status": "completed",
+    "createdAt": "2025-07-24T14:11:06.550Z",
+    "dailyBudget": 0.001,
+    "spentToday": 0.001
   }
 }

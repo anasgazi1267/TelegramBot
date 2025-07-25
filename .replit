@@ -5,6 +5,7 @@ modules = ["nodejs-20"]
 
 [nix]
 channel = "stable-24_05"
+packages = ["timetrap"]
 
 [gitHubImport]
 requiredFiles = [".replit", "replit.nix", ".config"]
