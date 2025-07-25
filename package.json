@@ -5,14 +5,12 @@
   "main": "index.ts",
   "type": "module",
   "scripts": {
-    "build": "tsc",
-    "start": "tsx index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/node-telegram-bot-api": "^0.64",
+    "@types/node-telegram-bot-api": "^0.64.9",
     "node-fetch": "^3.3.1",
     "node-telegram-bot-api": "^0.66.0"
   },
